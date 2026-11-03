@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Calendar, ChevronLeft, ChevronRight, Pencil, Plus, Undo2 } from 'lucide-react'
-import { formatMoney, HIDDEN, parseAmount, SYMBOL, toInput } from '../core/money'
+import { convert, formatMoney, HIDDEN, parseAmount, SYMBOL, toInput } from '../core/money'
 import { addMonthsToKey, currentMonth, daysInMonth, fmtMonth, monthRange, today } from '../core/dates'
 import { budgetProgress, expensesByCategory, makeProgress, summary } from '../core/finance'
 import type { Budget, Category } from '../core/types'
@@ -71,6 +71,14 @@ export function BudgetScreen() {
           <SectionHeader title="Category budgets">
             <button className="link-btn" style={{ fontSize: 15 }} disabled={!available.length} onClick={() => openSheet(<BudgetEditor available={available} />)}><Plus size={16} />Add</button>
           </SectionHeader>
+          {!!budgets.length && (() => {
+            const total = budgets.reduce((sum, b) => sum + convert(b.amount, b.currency, cur, settings.crcPerUSD), 0)
+            if (!allowance) return <Footnote>Category budgets are separate limits for specific categories. Your total spending isn't capped unless you set an allowance above.</Footnote>
+            const left = allowance - total
+            return left >= 0
+              ? <Footnote>Category budgets total {money(total)} of your {money(allowance)} allowance — {money(left)} is left for everything else. Every expense counts toward the allowance; budgeted ones also count toward their category.</Footnote>
+              : <div className="footnote warn">Category budgets total {money(total)}, which is {money(-left)} more than your {money(allowance)} allowance. You'll go over the allowance before these budgets run out.</div>
+          })()}
           {!budgets.length ? (
             <div className="card"><EmptyState icon="chart-pie" title="No category budgets" message="Set limits only where it helps — groceries, eating out, entertainment."
               action="Add a budget" onAction={() => openSheet(<BudgetEditor available={available} />)} /></div>

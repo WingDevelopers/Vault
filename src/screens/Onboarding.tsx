@@ -1,8 +1,11 @@
 import { useState } from 'react'
 import { Check, Circle, LockKeyhole, Target, Zap } from 'lucide-react'
-import { CURRENCY_NAME, parseAmount, parseRate, SYMBOL } from '../core/money'
+import { CURRENCY_NAME, nextInput, parseAmount, parseRate, SYMBOL } from '../core/money'
 import { today } from '../core/dates'
-import { ACCOUNT_KINDS, CURRENCIES, FREQUENCIES, type AccountKind, type Currency, type Frequency } from '../core/types'
+import { ACCOUNT_KINDS, CURRENCIES, DEFAULT_PAYDAYS, FREQUENCIES, type AccountKind, type Currency, type Frequency, type PayDays } from '../core/types'
+import { occurrence } from '../core/finance'
+import { fmtDate } from '../core/dates'
+import { PayDaysRows } from './Manage'
 import { newId } from '../db/db'
 import { runRecurring, saveAccount, saveGoal, saveRule, updateSettings } from '../db/repo'
 import { loadDemoData } from '../db/demo'
@@ -30,7 +33,7 @@ export function Onboarding() {
   const [currency, setCurrency] = useState<Currency>(data.settings.primaryCurrency)
   const [rate, setRate] = useState(data.settings.crcPerUSD)
   const [acc, setAcc] = useState({ name: '', kind: 'bank' as AccountKind, currency: data.settings.primaryCurrency, balance: '' })
-  const [income, setIncome] = useState({ name: 'Salary', amount: '', frequency: 'monthly' as Frequency, next: today(), accountId: '' })
+  const [income, setIncome] = useState({ name: 'Salary', amount: '', frequency: 'semimonthly' as Frequency, days: DEFAULT_PAYDAYS as PayDays, next: today(), accountId: '' })
   const [allowance, setAllowance] = useState('')
   const [goal, setGoal] = useState({ name: 'The Nest', purpose: 'Future apartment and moving expenses', target: '', date: '' })
   const [busy, setBusy] = useState(false)
@@ -53,7 +56,8 @@ export function Onboarding() {
       const account = accounts.find((a) => a.id === income.accountId) ?? accounts[0]
       if (amount && amount > 0 && account) {
         await saveRule({ id: newId(), title: income.name || 'Salary', kind: 'income', amount, currency: account.currency, frequency: income.frequency,
-          startDate: income.next, endDate: null, generatedCount: 0, active: true, accountId: account.id, destAccountId: null,
+          days: income.frequency === 'semimonthly' ? income.days : null,
+          startDate: income.frequency === 'semimonthly' ? today() : income.next, endDate: null, generatedCount: 0, active: true, accountId: account.id, destAccountId: null,
           categoryId: data.categories.find((c) => c.kind === 'income' && c.name === 'Salary')?.id ?? null, createdAt: Date.now() })
       }
     }
@@ -169,7 +173,14 @@ export function Onboarding() {
                     {FREQUENCIES.map((f) => <option key={f.id} value={f.id}>{f.title}</option>)}
                   </select>
                 </FormRow>
-                <FormRow label="Next payday"><input type="date" className="field" min={today()} value={income.next} onChange={(e) => e.target.value && setIncome({ ...income, next: e.target.value })} /></FormRow>
+                {income.frequency === 'semimonthly' ? (
+                  <>
+                    <PayDaysRows days={income.days} onChange={(d) => setIncome({ ...income, days: d })} />
+                    <FormRow label="Next payday"><span className="muted">{fmtDate(occurrence(0, today(), 'semimonthly', income.days))}</span></FormRow>
+                  </>
+                ) : (
+                  <FormRow label="Next payday"><input type="date" className="field" min={today()} value={income.next} onChange={(e) => e.target.value && setIncome({ ...income, next: e.target.value })} /></FormRow>
+                )}
                 <FormRow label="Paid into">
                   <select className="field" value={income.accountId || accounts[0]?.id || ''} onChange={(e) => setIncome({ ...income, accountId: e.target.value })}>
                     {accounts.map((a) => <option key={a.id} value={a.id}>{a.name} · {a.currency}</option>)}
@@ -183,7 +194,7 @@ export function Onboarding() {
             <>
               {title('Monthly spending', 'Optionally set one allowance for everything you spend in a month.')}
               <div className="amount-input"><span className="sym">{SYMBOL[currency]}</span>
-                <input inputMode="decimal" placeholder="0" value={allowance} onChange={(e) => setAllowance(e.target.value)} aria-label="Monthly allowance" /></div>
+                <input inputMode="decimal" placeholder="0" value={allowance} onChange={(e) => setAllowance(nextInput(allowance, e.target.value))} aria-label="Monthly allowance" /></div>
               <Footnote>You can add category budgets later. Unused amounts don't roll over unless you turn that on.</Footnote>
             </>
           )}

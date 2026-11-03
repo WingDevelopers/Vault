@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { Plus } from 'lucide-react'
 import { CURRENCY_NAME, parseAmount, SYMBOL, toInput } from '../core/money'
-import { fmtDay, today } from '../core/dates'
+import { addDays, fmtDay, today } from '../core/dates'
 import { balance, nextOccurrence } from '../core/finance'
 import {
-  ACCOUNT_KINDS, CURRENCIES, FREQUENCIES,
-  type Account, type AccountKind, type Category, type CategoryKind, type Currency, type Frequency, type RecurringRule, type TransactionKind,
+  ACCOUNT_KINDS, CURRENCIES, DEFAULT_PAYDAYS, FREQUENCIES,
+  type PayDays, type Account, type AccountKind, type Category, type CategoryKind, type Currency, type Frequency, type RecurringRule, type TransactionKind,
 } from '../core/types'
 import { newId } from '../db/db'
 import { deleteAccount, deleteCategory, deleteRule, runRecurring, saveAccount, saveCategory, saveRule } from '../db/repo'
@@ -213,6 +213,28 @@ export function CategoryEditor({ category, kind }: { category?: Category; kind: 
 // Recurring
 // ============================================================================
 
+const ordinal = (d: number) => `${d}${d % 10 === 1 && d !== 11 ? 'st' : d % 10 === 2 && d !== 12 ? 'nd' : d % 10 === 3 && d !== 13 ? 'rd' : 'th'}`
+export const describePaydays = (d: PayDays) => `${ordinal(d[0])} & ${d[1] === 31 ? 'last day' : ordinal(d[1])}`
+
+/** Two paydays per month, e.g. the 15th and the last day (quincena). */
+export function PayDaysRows({ days, onChange }: { days: PayDays; onChange: (d: PayDays) => void }) {
+  return (
+    <>
+      <FormRow label="First payday">
+        <select className="field" value={days[0]} onChange={(e) => onChange([Number(e.target.value), days[1]])} aria-label="First payday">
+          {Array.from({ length: 15 }, (_, i) => i + 1).map((d) => <option key={d} value={d}>{ordinal(d)}</option>)}
+        </select>
+      </FormRow>
+      <FormRow label="Second payday">
+        <select className="field" value={days[1]} onChange={(e) => onChange([days[0], Number(e.target.value)])} aria-label="Second payday">
+          {Array.from({ length: 15 }, (_, i) => i + 16).map((d) => <option key={d} value={d}>{ordinal(d)}</option>)}
+          <option value={31}>Last day of the month</option>
+        </select>
+      </FormRow>
+    </>
+  )
+}
+
 export function RecurringPage() {
   const { data, openSheet } = useApp()
   const rules = [...data.rules].sort((a, b) => a.createdAt - b.createdAt)
@@ -236,13 +258,14 @@ export function RecurringPage() {
               <div className="card list">
                 {items.map((r) => {
                   const cat = data.categories.find((c) => c.id === r.categoryId)
-                  const next = r.active ? nextOccurrence(r.startDate, r.frequency, r.generatedCount, r.endDate) : null
+                  const next = r.active ? nextOccurrence(r.startDate, r.frequency, r.generatedCount, r.endDate, r.days ?? null) : null
+                  const freq = r.frequency === 'semimonthly' ? `Twice a month (${describePaydays(r.days ?? DEFAULT_PAYDAYS)})` : FREQUENCIES.find((f) => f.id === r.frequency)?.title
                   return (
                     <button key={r.id} className="list-row" onClick={() => openSheet(<RuleEditor rule={r} />)}>
                       <CatIcon icon={cat?.icon ?? (r.kind === 'transfer' ? 'transfer' : 'repeat')} color={cat?.color ?? '#38CFFF'} />
                       <div className="main">
                         <div className="title" style={{ color: r.active ? undefined : 'var(--slate)' }}>{r.title}</div>
-                        <div className="sub">{FREQUENCIES.find((f) => f.id === r.frequency)?.title} · {next ? `next ${fmtDay(next)}` : r.active ? 'ended' : 'paused'}</div>
+                        <div className="sub">{freq} · {next ? `next ${fmtDay(next)}` : r.active ? 'ended' : 'paused'}</div>
                       </div>
                       <Amount className="end" value={r.kind === 'expense' ? -r.amount : r.amount} currency={r.currency} signed={r.kind === 'income'} />
                     </button>
@@ -266,6 +289,7 @@ export function RuleEditor({ rule }: { rule?: RecurringRule }) {
   const [amountText, setAmountText] = useState(rule ? toInput(rule.amount) : '')
   const [currency, setCurrency] = useState<Currency>(rule?.currency ?? accounts[0]?.currency ?? data.settings.primaryCurrency)
   const [frequency, setFrequency] = useState<Frequency>(rule?.frequency ?? 'monthly')
+  const [days, setDays] = useState<PayDays>(rule?.days ?? DEFAULT_PAYDAYS)
   const [startDate, setStartDate] = useState(rule?.startDate ?? today())
   const [endDate, setEndDate] = useState(rule?.endDate ?? '')
   const [accountId, setAccountId] = useState(rule?.accountId ?? accounts[0]?.id ?? '')
@@ -281,13 +305,15 @@ export function RuleEditor({ rule }: { rule?: RecurringRule }) {
     if (!valid || !amount) return
     let start = rule && posted > 0 ? rule.startDate : startDate
     let count = posted
-    if (rule && posted > 0 && rule.frequency !== frequency) {
-      // Re-anchor at the next occurrence so the new pattern only applies going forward.
-      start = nextOccurrence(rule.startDate, rule.frequency, posted, null) ?? today()
+    const daysChanged = frequency === 'semimonthly' && (rule?.days ?? DEFAULT_PAYDAYS).join() !== days.join()
+    if (rule && posted > 0 && (rule.frequency !== frequency || daysChanged)) {
+      // Re-anchor after the last posted occurrence so the new pattern only applies going forward.
+      const last = nextOccurrence(rule.startDate, rule.frequency, posted - 1, null, rule.days ?? null) ?? today()
+      start = addDays(last, 1)
       count = 0
     }
     await saveRule({
-      id: rule?.id ?? newId(), title: title.trim(), kind, amount, currency, frequency, startDate: start, endDate: endDate || null,
+      id: rule?.id ?? newId(), title: title.trim(), kind, amount, currency, frequency, days: frequency === 'semimonthly' ? days : null, startDate: start, endDate: endDate || null,
       generatedCount: count, active, accountId, destAccountId: kind === 'transfer' ? destId : null,
       categoryId: kind === 'transfer' ? null : categoryId || null, createdAt: rule?.createdAt ?? Date.now(),
     })
@@ -339,7 +365,8 @@ export function RuleEditor({ rule }: { rule?: RecurringRule }) {
               {FREQUENCIES.map((f) => <option key={f.id} value={f.id}>{f.title}</option>)}
             </select>
           </FormRow>
-          <FormRow label="First date"><input type="date" className="field" disabled={posted > 0} value={startDate} onChange={(e) => e.target.value && setStartDate(e.target.value)} /></FormRow>
+          {frequency === 'semimonthly' && <PayDaysRows days={days} onChange={setDays} />}
+          <FormRow label={frequency === 'semimonthly' ? 'Starting from' : 'First date'}><input type="date" className="field" disabled={posted > 0} value={startDate} onChange={(e) => e.target.value && setStartDate(e.target.value)} /></FormRow>
           <FormRow label="End date"><input type="date" className="field" value={endDate} min={startDate} onChange={(e) => setEndDate(e.target.value)} /></FormRow>
           {rule && <FormRow label="Active"><Switch checked={active} onChange={setActive} label="Active" /></FormRow>}
         </FormCard>

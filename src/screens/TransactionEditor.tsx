@@ -2,13 +2,14 @@ import { useMemo, useState } from 'react'
 import { ArrowRightLeft, Calendar, CircleArrowDown, Landmark, Plus, Repeat, AlignLeft, Trash2 } from 'lucide-react'
 import { convert, formatMoney, HIDDEN, parseAmount, parseRate, toInput } from '../core/money'
 import { fmtDay, today } from '../core/dates'
-import { FREQUENCIES, type Currency, type Frequency, type Transaction, type TransactionKind } from '../core/types'
+import { DEFAULT_PAYDAYS, FREQUENCIES, type Currency, type Frequency, type PayDays, type Transaction, type TransactionKind } from '../core/types'
+import { occurrence } from '../core/finance'
 import { newId } from '../db/db'
 import { deleteTransaction, saveRule, saveTransaction, updateSettings } from '../db/repo'
 import { haptic, useApp } from '../state'
 import { AmountInput, Confirm, DecimalField, FormCard, FormRow, Segmented, Sheet, Switch } from '../ui/components'
 import { CatIcon, Icon } from '../ui/icons'
-import { CategoryEditor } from './Manage'
+import { CategoryEditor, PayDaysRows } from './Manage'
 
 const KINDS: { id: TransactionKind; title: string }[] = [
   { id: 'expense', title: 'Expense' }, { id: 'income', title: 'Income' }, { id: 'transfer', title: 'Transfer' },
@@ -33,6 +34,7 @@ export function TransactionEditor({ tx, initialKind = 'expense' }: { tx?: Transa
   const [rateText, setRateText] = useState(tx?.rate ?? settings.crcPerUSD)
   const [repeats, setRepeats] = useState(false)
   const [frequency, setFrequency] = useState<Frequency>('monthly')
+  const [days, setDays] = useState<PayDays>(DEFAULT_PAYDAYS)
 
   const amount = parseAmount(amountText)
   const rate = parseRate(rateText)
@@ -72,7 +74,9 @@ export function TransactionEditor({ tx, initialKind = 'expense' }: { tx?: Transa
       t.ruleId = ruleId
       await saveRule({
         id: ruleId, title: t.note || categories.find((c) => c.id === categoryId)?.name || kind[0].toUpperCase() + kind.slice(1),
-        kind, amount, currency, frequency, startDate: date, endDate: null, generatedCount: 1, active: true,
+        kind, amount, currency, frequency, days: frequency === 'semimonthly' ? days : null, startDate: date, endDate: null,
+        // This transaction is the first occurrence unless it isn't on a payday.
+        generatedCount: occurrence(0, date, frequency, days) === date ? 1 : 0, active: true,
         accountId: account.id, destAccountId: t.destAccountId, categoryId: t.categoryId, createdAt: Date.now(),
       })
     }
@@ -156,6 +160,7 @@ export function TransactionEditor({ tx, initialKind = 'expense' }: { tx?: Transa
                 </select>
               </FormRow>
             )}
+            {repeats && frequency === 'semimonthly' && <PayDaysRows days={days} onChange={setDays} />}
           </FormCard>
         )}
 
