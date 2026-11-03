@@ -1,6 +1,6 @@
 import { useEffect, useRef, type ReactNode } from 'react'
 import { ChevronLeft, Info } from 'lucide-react'
-import { formatMoney, HIDDEN, SYMBOL } from '../core/money'
+import { formatMoney, groupInput, HIDDEN, nextInput, SYMBOL } from '../core/money'
 import type { BudgetStatus } from '../core/finance'
 import type { Cents, Currency } from '../core/types'
 import { useApp, useHidden } from '../state'
@@ -129,8 +129,8 @@ export function FormRow({ label, icon, children }: { label: ReactNode; icon?: Re
 
 export function DecimalField({ value, onChange, placeholder = '0', width }: { value: string; onChange: (v: string) => void; placeholder?: string; width?: number }) {
   return (
-    <input className="field num" inputMode="decimal" value={value} placeholder={placeholder} style={width ? { maxWidth: width } : undefined}
-      onChange={(e) => onChange(e.target.value)} />
+    <input className="field num" inputMode="decimal" value={groupInput(value)} placeholder={placeholder} style={width ? { maxWidth: width } : undefined}
+      onChange={(e) => onChange(nextInput(value, e.target.value))} />
   )
 }
 
@@ -147,8 +147,8 @@ export function AmountInput({ value, onChange, currency, onCurrencyChange, color
         onClick={() => onCurrencyChange?.(currency === 'CRC' ? 'USD' : 'CRC')}>
         {SYMBOL[currency]}
       </button>
-      <input ref={ref} inputMode="decimal" placeholder="0" value={value} aria-label="Amount" style={{ color }}
-        onChange={(e) => onChange(e.target.value)} />
+      <input ref={ref} inputMode="decimal" placeholder="0" value={groupInput(value)} aria-label="Amount" style={{ color }}
+        onChange={(e) => onChange(nextInput(value, e.target.value))} />
       {onCurrencyChange && <span className="code">{currency}</span>}
     </div>
   )
