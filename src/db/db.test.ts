@@ -25,6 +25,16 @@ describe('data layer', () => {
     expect(d.rules[0].generatedCount).toBe(3)
   })
 
+  it('posts twice-a-month salary on both paydays', async () => {
+    await saveAccount({ id: 'a', name: 'Bank', kind: 'bank', currency: 'CRC', openingBalance: 0, openingDate: '2026-01-01', archived: false, sortOrder: 0, createdAt: 0 })
+    await saveRule({ id: 'q', title: 'Salary', kind: 'income', amount: 700_000_00, currency: 'CRC', frequency: 'semimonthly', days: [15, 31],
+      startDate: '2026-01-01', endDate: null, generatedCount: 0, active: true, accountId: 'a', destAccountId: null, categoryId: null, createdAt: 0 })
+    expect(await runRecurring('2026-02-20')).toBe(3)
+    const d = await loadAll()
+    expect(d.transactions.map((t) => t.date).sort()).toEqual(['2026-01-15', '2026-01-31', '2026-02-15'])
+    expect(await runRecurring('2026-02-28')).toBe(1)
+  })
+
   it('cascades account and category deletes', async () => {
     await loadDemoData('2026-06-15')
     let d = await loadAll()

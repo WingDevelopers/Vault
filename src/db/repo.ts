@@ -132,7 +132,7 @@ export async function runRecurring(now = today()): Promise<number> {
     for (const r of await db.rules.toArray()) {
       if (!r.active || !accounts.has(r.accountId)) continue
       if (r.kind === 'transfer' && (!r.destAccountId || !accounts.has(r.destAccountId))) continue
-      const due = dueOccurrences(r.startDate, r.frequency, r.generatedCount, r.endDate, now)
+      const due = dueOccurrences(r.startDate, r.frequency, r.generatedCount, r.endDate, now, 400, r.days ?? null)
       if (!due.length) continue
       const dest = r.destAccountId ? accounts.get(r.destAccountId)?.currency : undefined
       await db.transactions.bulkAdd(due.map((o) => transactionFromRule(r, o.date, settings.crcPerUSD, dest)))
