@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { convert, formatMoney, parseAmount, totalIn } from './money'
+import { convert, formatMoney, groupInput, nextInput, parseAmount, toInput, totalIn } from './money'
 import { addMonths, monthRange } from './dates'
 import {
   balance, budgetProgress, dueOccurrences, expensesByCategory, holding, netWorth, projectGoal, summary, type Ledger,
@@ -172,6 +172,19 @@ describe('recurrence', () => {
   it('respects end dates', () => {
     expect(dueOccurrences('2026-01-01', 'weekly', 0, '2026-01-20', '2026-03-01')).toHaveLength(3)
   })
+  it('pays twice a month on fixed days (quincena), clamping "last day"', () => {
+    const d = dueOccurrences('2026-01-10', 'semimonthly', 0, null, '2026-03-31', 400, [15, 31]).map((o) => o.date)
+    expect(d).toEqual(['2026-01-15', '2026-01-31', '2026-02-15', '2026-02-28', '2026-03-15', '2026-03-31'])
+    // starting after the first payday of the month skips it
+    expect(dueOccurrences('2026-01-16', 'semimonthly', 0, null, '2026-02-16', 400, [15, 30]).map((o) => o.date))
+      .toEqual(['2026-01-30', '2026-02-15'])
+    // older rules without days default to the 15th and last day
+    expect(dueOccurrences('2026-04-01', 'semimonthly', 0, null, '2026-04-30').map((o) => o.date)).toEqual(['2026-04-15', '2026-04-30'])
+  })
+  it('keeps every-2-weeks as a 14-day cycle', () => {
+    expect(dueOccurrences('2026-01-02', 'biweekly', 0, null, '2026-02-13').map((o) => o.date))
+      .toEqual(['2026-01-02', '2026-01-16', '2026-01-30', '2026-02-13'])
+  })
   it('clamps month ends in leap years', () => {
     expect(addMonths('2028-01-31', 1)).toBe('2028-02-29')
   })
@@ -197,5 +210,25 @@ describe('money', () => {
     expect(formatMoney(col(1_250_000), 'CRC')).toBe('₡1,250,000')
     expect(formatMoney(-20_50, 'USD')).toBe('−$20.50')
     expect(formatMoney(col(5_000), 'CRC', { signed: true })).toBe('+₡5,000')
+  })
+  it('adds thousands separators while typing, and parses them back exactly', () => {
+    const cases: [string, string][] = [
+      ['4500', '4,500'], ['1250000', '1,250,000'], ['1250000.5', '1,250,000.5'], ['12,500', '12,500'],
+      ['1,2500', '12,500'], ['12500,5', '12,500.5'], ['1500,', '1,500.'], ['.5', '0.5'], ['007', '7'],
+      ['1.234', '1.23'], ['₡ 3 500', '3,500'], ['', ''],
+    ]
+    for (const [typed, shown] of cases) {
+      expect(groupInput(typed)).toBe(shown)
+      expect(groupInput(groupInput(typed))).toBe(shown) // stable on every keystroke
+    }
+    // typing vs deleting
+    expect(nextInput('1,234', '1,23')).toBe('123')        // backspace keeps it an integer
+    expect(nextInput('1,234', '1,2345')).toBe('12,345')   // typing another digit regroups
+    expect(nextInput('1,234', '1,234,')).toBe('1,234.')   // comma key on a Spanish keyboard = decimal
+    expect(nextInput('12', '12,5')).toBe('12.5')
+    expect(parseAmount('1,250,000.5')).toBe(125_000_050)
+    expect(parseAmount('1,500.')).toBe(150_000)
+    expect(toInput(125_000_050)).toBe('1,250,000.5')
+    expect(parseAmount(toInput(123_456_789))).toBe(123_456_789)
   })
 })

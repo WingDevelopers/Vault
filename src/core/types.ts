@@ -16,7 +16,10 @@ export type TransactionKind = 'expense' | 'income' | 'transfer'
 export type CategoryKind = 'expense' | 'income'
 export type AccountKind = 'bank' | 'cash' | 'savings' | 'investment'
 export type AssetType = 'stock' | 'etf' | 'fund' | 'bond' | 'cash' | 'other'
-export type Frequency = 'weekly' | 'biweekly' | 'monthly' | 'yearly'
+export type Frequency = 'weekly' | 'biweekly' | 'semimonthly' | 'monthly' | 'yearly'
+/** Twice-a-month paydays: [first (1–15), second (16–30, or 31 = last day of the month)]. */
+export type PayDays = [number, number]
+export const DEFAULT_PAYDAYS: PayDays = [15, 31]
 
 export interface Settings {
   id: 'app'
@@ -87,6 +90,8 @@ export interface RecurringRule {
   amount: Cents
   currency: Currency
   frequency: Frequency
+  /** Only for 'semimonthly'. Missing on older rules → [15, last day]. */
+  days?: PayDays | null
   startDate: ISODate
   endDate: ISODate | null
   /** Occurrences already posted. Occurrence n is computed from startDate (no drift). */
@@ -191,6 +196,7 @@ export const ASSET_TYPES: { id: AssetType; title: string }[] = [
 export const FREQUENCIES: { id: Frequency; title: string }[] = [
   { id: 'weekly', title: 'Weekly' },
   { id: 'biweekly', title: 'Every 2 weeks' },
+  { id: 'semimonthly', title: 'Twice a month' },
   { id: 'monthly', title: 'Monthly' },
   { id: 'yearly', title: 'Yearly' },
 ]

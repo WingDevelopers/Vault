@@ -1,9 +1,10 @@
 import { addTo, convert, emptyTotals, sumTotals, totalIn, type Totals } from './money'
-import { addDays, addMonths, addMonthsToKey, currentMonth, inRange, monthEnd, monthKey, monthRange, monthsBetween, today, type DateRange } from './dates'
+import { addDays, addMonths, addMonthsToKey, currentMonth, daysInMonth, inRange, monthEnd, monthKey, monthRange, monthsBetween, today, type DateRange } from './dates'
 import {
   isAvailableCash,
   type Account, type AssetType, type Cents, type Contribution, type Currency, type FinanceData, type Frequency,
-  type GoalContribution, type ISODate, type Investment, type MonthKey, type Transaction,
+  type GoalContribution, type ISODate, type Investment, type MonthKey, type PayDays, type Transaction,
+  DEFAULT_PAYDAYS,
 } from './types'
 
 // ============================================================================
@@ -298,8 +299,23 @@ export function projectGoal(target: Cents, contributions: GoalContribution[], pl
 // Recurrence — occurrence n is always computed from the start date, so month-end dates don't drift.
 // ============================================================================
 
-export function occurrence(n: number, start: ISODate, f: Frequency): ISODate {
+function semimonthlyRaw(k: number, firstMonth: MonthKey, days: PayDays): ISODate {
+  const month = addMonthsToKey(firstMonth, Math.floor(k / 2))
+  const [y, m] = month.split('-').map(Number)
+  const day = Math.min(days[k % 2], daysInMonth(y, m))
+  return `${month}-${String(day).padStart(2, '0')}`
+}
+
+export function occurrence(n: number, start: ISODate, f: Frequency, days: PayDays | null = null): ISODate {
   switch (f) {
+    case 'semimonthly': {
+      // Paydays on two fixed days each month, starting with the first payday on/after `start`.
+      const d: PayDays = days ?? DEFAULT_PAYDAYS
+      const first = monthKey(start)
+      let offset = 0
+      while (offset < 2 && semimonthlyRaw(offset, first, d) < start) offset++
+      return semimonthlyRaw(n + offset, first, d)
+    }
     case 'weekly': return addDays(start, 7 * n)
     case 'biweekly': return addDays(start, 14 * n)
     case 'monthly': return addMonths(start, n)
@@ -308,18 +324,18 @@ export function occurrence(n: number, start: ISODate, f: Frequency): ISODate {
 }
 
 /** Occurrences due on or before `now`, starting at index `from`. */
-export function dueOccurrences(start: ISODate, f: Frequency, from: number, end: ISODate | null, now = today(), limit = 400) {
+export function dueOccurrences(start: ISODate, f: Frequency, from: number, end: ISODate | null, now = today(), limit = 400, days: PayDays | null = null) {
   const out: { index: number; date: ISODate }[] = []
   for (let i = from; out.length < limit; i++) {
-    const d = occurrence(i, start, f)
+    const d = occurrence(i, start, f, days)
     if (d > now || (end && d > end)) break
     out.push({ index: i, date: d })
   }
   return out
 }
 
-export function nextOccurrence(start: ISODate, f: Frequency, index: number, end: ISODate | null): ISODate | null {
-  const d = occurrence(index, start, f)
+export function nextOccurrence(start: ISODate, f: Frequency, index: number, end: ISODate | null, days: PayDays | null = null): ISODate | null {
+  const d = occurrence(index, start, f, days)
   return end && d > end ? null : d
 }
 
@@ -327,6 +343,7 @@ export function monthlyEquivalent(amount: Cents, f: Frequency): Cents {
   switch (f) {
     case 'weekly': return Math.round((amount * 52) / 12)
     case 'biweekly': return Math.round((amount * 26) / 12)
+    case 'semimonthly': return amount * 2
     case 'monthly': return amount
     case 'yearly': return Math.round(amount / 12)
   }

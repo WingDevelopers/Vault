@@ -72,8 +72,32 @@ export function parseRate(raw: string): string | null {
   return new Big(c).div(100).toString()
 }
 
-/** Cents → plain editable string ("12500.5"). */
-export const toInput = (c: Cents | null | undefined): string => (c == null ? '' : new Big(c).div(100).toString())
+/**
+ * Formats an amount while it's being typed: "1250000.5" → "1,250,000.5".
+ * Decimal separator is "."; a trailing comma followed by 0–2 digits (as typed on a
+ * Spanish-locale keyboard) is treated as the decimal separator too — unless the user is
+ * deleting (`commaMayBeDecimal = false`), so "1,234" → backspace → "1,23" becomes "123". Idempotent.
+ */
+export function groupInput(raw: string, commaMayBeDecimal = true): string {
+  let s = (raw ?? '').replace(/[^0-9.,]/g, '')
+  if (!s) return ''
+  let decimalAt = s.lastIndexOf('.')
+  if (decimalAt < 0 && commaMayBeDecimal && /,\d{0,2}$/.test(s)) decimalAt = s.lastIndexOf(',')
+  let int = decimalAt >= 0 ? s.slice(0, decimalAt) : s
+  const frac = decimalAt >= 0 ? s.slice(decimalAt + 1).replace(/[^0-9]/g, '').slice(0, 2) : null
+  int = int.replace(/[^0-9]/g, '').replace(/^0+(?=\d)/, '')
+  if (int === '' && frac !== null) int = '0'
+  s = int.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+  return frac !== null ? `${s}.${frac}` : s
+}
+
+/** onChange helper for amount fields: groups digits, aware of whether the user is typing or deleting. */
+export function nextInput(previous: string, typed: string): string {
+  return groupInput(typed, typed.length >= groupInput(previous).length)
+}
+
+/** Cents → editable string with thousands separators ("12,500.5"). */
+export const toInput = (c: Cents | null | undefined): string => (c == null ? '' : groupInput(new Big(c).div(100).toString()))
 
 // ---------- Formatting ----------
 
