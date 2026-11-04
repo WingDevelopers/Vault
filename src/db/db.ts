@@ -49,7 +49,7 @@ export type DataTable = (typeof DATA_TABLES)[number]
 
 export function defaultSettings(): Settings {
   return {
-    id: 'app', primaryCurrency: 'CRC', displayCurrency: null, allowanceCurrency: null, crcPerUSD: '505', rateUpdatedAt: today(), autoRate: true, rateSource: null, rateCheckedAt: null, monthlyAllowance: null, onboarded: false,
+    id: 'app', primaryCurrency: 'CRC', displayCurrency: null, allowanceCurrency: null, crcPerUSD: '505', rateUpdatedAt: today(), autoRate: true, rateSource: null, rateCheckedAt: null, monthlyAllowance: null, salaryPlan: null, onboarded: false,
     hideAmounts: false, isDemo: false, lastAccountId: null, lock: { enabled: false, pinHash: null, pinSalt: null, credentialId: null },
   }
 }
