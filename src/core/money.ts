@@ -125,11 +125,12 @@ export function formatMoney(c: Cents, currency: Currency, opts: { signed?: boole
 }
 
 /** Compact for chart labels: "₡1.2M", "$350K". */
-export function formatCompact(c: Cents, currency: Currency): string {
+/** `keepDecimal` always shows one decimal ("₡1.0M") instead of trimming ".0". */
+export function formatCompact(c: Cents, currency: Currency, keepDecimal = false): string {
   const v = c / 100
   const a = Math.abs(v)
   const sign = v < 0 ? '−' : ''
-  const trim = (n: number) => n.toFixed(1).replace(/\.0$/, '')
+  const trim = (n: number) => (keepDecimal ? n.toFixed(1) : n.toFixed(1).replace(/\.0$/, ''))
   if (a >= 1e9) return `${sign}${SYMBOL[currency]}${trim(a / 1e9)}B`
   if (a >= 1e6) return `${sign}${SYMBOL[currency]}${trim(a / 1e6)}M`
   if (a >= 1e3) return `${sign}${SYMBOL[currency]}${trim(a / 1e3)}K`
