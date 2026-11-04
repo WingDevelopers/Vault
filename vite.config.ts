@@ -2,7 +2,7 @@ import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
-// `base: './'` makes the build work at any URL path — e.g. https://<you>.github.io/midnight-ledger/
+// `base: './'` makes the build work at any URL path — e.g. https://<you>.github.io/Vault/
 export default defineConfig({
   base: './',
   define: { __APP_VERSION__: JSON.stringify(process.env.npm_package_version ?? '1.0.0') },
@@ -12,8 +12,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['apple-touch-icon.png', 'favicon.svg'],
       manifest: {
-        name: 'Midnight Ledger',
-        short_name: 'Ledger',
+        name: 'WalletWing',
+        short_name: 'WalletWing',
         description: 'Private personal finance. Your data never leaves this device.',
         start_url: './',
         scope: './',

@@ -1,4 +1,4 @@
-# Midnight Ledger
+# WalletWing
 
 A private personal-finance web app built mainly for iPhone, with a midnight-navy and electric-blue look.
 You install it from Safari with **Add to Home Screen**. It works offline, and **all data stays on your device** in IndexedDB. There's no backend, no sign-up and no tracking.
@@ -13,7 +13,7 @@ It's built with React, TypeScript and Vite, uses Dexie (IndexedDB) for storage, 
 
 **Start the app:**
 
-1. Unzip the project, for example to `Documents\midnight-ledger`.
+1. Unzip the project, for example to `Documents\walletwing`.
 2. Open the folder in File Explorer. Right-click an empty area and choose **Open in Terminal** (or type `powershell` in the address bar and press Enter).
 3. Run:
 
@@ -43,19 +43,19 @@ The repo includes `.github/workflows/deploy.yml`. Every push to `main` runs the 
 
 **One-time setup:**
 
-1. On GitHub, create a new repository, for example `midnight-ledger`. It can be private, but GitHub Pages on a private repo needs a paid plan, so public is fine. Only the app's code is public; your financial data never leaves your phone.
+1. On GitHub, create a new repository, for example `walletwing`. It can be private, but GitHub Pages on a private repo needs a paid plan, so public is fine. Only the app's code is public; your financial data never leaves your phone.
 2. Push this folder to it. Use either option:
    - **GitHub Desktop:** *File → Add local repository* → pick the folder → *Publish repository*.
    - **Command line** (needs Git):
 
      ```powershell
-     git remote add origin https://github.com/<your-user>/midnight-ledger.git
+     git remote add origin https://github.com/<your-user>/walletwing.git
      git push -u origin main
      ```
 
 3. In the repo, go to **Settings → Pages → Build and deployment → Source** and choose **GitHub Actions**.
 4. Open the **Actions** tab and wait for the green check, which takes about a minute. Your app is then live at
-   **`https://<your-user>.github.io/midnight-ledger/`**
+   **`https://<your-user>.github.io/walletwing/`**
 
 **After that:** edit, commit and push. The site updates on its own, and the installed app picks up the new version the next time you open it.
 
@@ -63,7 +63,7 @@ The repo includes `.github/workflows/deploy.yml`. Every push to `main` runs the 
 
 1. Open your GitHub Pages address in **Safari**.
 2. Tap the **Share** button, then **Add to Home Screen**, then **Add**.
-3. Open **Ledger** from your Home Screen. It runs full-screen and works in Airplane Mode.
+3. Open **WalletWing** from your Home Screen. It runs full-screen and works in Airplane Mode.
 4. Choose your currency and add your accounts, or tap **Explore with demo data** to look around first.
 
 Important things to know:
