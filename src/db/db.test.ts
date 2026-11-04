@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { LedgerDB, loadAll, useDatabase } from './db'
-import { completeReminder, deleteAccount, deleteCategory, eraseAll, runRecurring, saveReminder, seedCategoriesIfNeeded, ensureSettings, saveAccount, saveRule, undoCompleteReminder } from './repo'
+import { completeReminder, deleteAccount, deleteCategory, eraseAll, runRecurring, saveReminder, seedCategoriesIfNeeded, ensureSettings, saveAccount, saveRule, uncompleteReminder, undoCompleteReminder } from './repo'
 import { applyCSVImport, exportJSON, planCSVImport, readBackup, restoreBackup, transactionsToCSV } from './backup'
 import { loadDemoData } from './demo'
 import { balance, netWorth, reminderDue } from '../core/finance'
@@ -56,9 +56,18 @@ describe('data layer', () => {
     await completeReminder(r)
     let d = await loadAll()
     expect(reminderDue(d.reminders[0])).toBe('2026-12-15')
+    expect(d.reminders[0].lastDone).toBeTruthy()
     await undoCompleteReminder(r)
     d = await loadAll()
     expect(reminderDue(d.reminders[0])).toBe('2026-11-15')
+    expect(d.reminders[0].lastDone).toBeNull()
+    // checking and then un-checking the circle returns it to pending
+    await completeReminder(d.reminders[0])
+    d = await loadAll()
+    await uncompleteReminder(d.reminders[0])
+    d = await loadAll()
+    expect(reminderDue(d.reminders[0])).toBe('2026-11-15')
+    expect(d.reminders[0].lastDone).toBeNull()
   })
 
   it('round-trips an encrypted JSON backup exactly', async () => {

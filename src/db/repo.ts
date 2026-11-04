@@ -36,11 +36,16 @@ export const saveReminder = (r: Reminder) => db.reminders.put(r)
 export const deleteReminder = (id: string) => db.reminders.delete(id)
 /** Marks the current occurrence done: repeating reminders move to the next date; one-offs are completed. */
 export async function completeReminder(r: Reminder) {
-  if (r.repeat) await db.reminders.update(r.id, { index: r.index + 1 })
+  if (r.repeat) await db.reminders.update(r.id, { index: r.index + 1, lastDone: today() })
   else await db.reminders.update(r.id, { doneAt: Date.now() })
 }
+/** Un-checks the current cycle (tapping a checked circle). */
+export async function uncompleteReminder(r: Reminder) {
+  if (r.repeat) await db.reminders.update(r.id, { index: Math.max(0, r.index - 1), lastDone: null })
+  else await db.reminders.update(r.id, { doneAt: null })
+}
 export async function undoCompleteReminder(r: Reminder) {
-  await db.reminders.update(r.id, { index: r.index, doneAt: r.doneAt })
+  await db.reminders.update(r.id, { index: r.index, doneAt: r.doneAt, lastDone: r.lastDone ?? null })
 }
 
 export const deleteTransaction = (id: string) => db.transactions.delete(id)
