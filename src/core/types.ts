@@ -71,6 +71,11 @@ export interface Account {
   currency: Currency
   openingBalance: Cents
   openingDate: ISODate
+  /**
+   * When the opening balance/date was last saved. Transactions on the opening date recorded before this
+   * are already included in the balance typed in. Missing on accounts never edited since this was added.
+   */
+  openingSetAt?: number
   archived: boolean
   sortOrder: number
   createdAt: number
@@ -154,6 +159,8 @@ export interface Contribution {
   rate: string
   /** Account the money came from (or returns to). Optional. */
   sourceAccountId: string | null
+  /** Missing on contributions saved before this field existed. */
+  createdAt?: number
 }
 
 export interface Valuation {

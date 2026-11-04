@@ -38,14 +38,25 @@ export function contributionEffect(c: Contribution, inv: Investment | undefined,
   return -convert(c.amount, inv.currency, a.currency, c.rate)
 }
 
+/**
+ * Whether a movement counts on top of the opening balance. The opening balance is what the account
+ * held on `openingDate`, so anything dated earlier is already in it. On the opening date itself,
+ * a movement counts only if it was recorded after the opening balance was set.
+ */
+export function afterOpening(a: Account, date: ISODate, createdAt?: number): boolean {
+  if (date !== a.openingDate) return date > a.openingDate
+  if (a.openingSetAt == null) return true
+  return createdAt != null && createdAt > a.openingSetAt
+}
+
 /** Balance at the end of `asOf` (inclusive). Omit for all time. */
 export function balance(a: Account, l: Ledger, asOf?: ISODate): Cents {
   const cutoff = asOf ?? '9999-12-31'
   if (a.openingDate > cutoff) return 0
   let total = a.openingBalance
-  for (const t of l.transactions) if (t.date <= cutoff) total += txEffect(t, a)
+  for (const t of l.transactions) if (t.date <= cutoff && afterOpening(a, t.date, t.createdAt)) total += txEffect(t, a)
   const invById = new Map(l.investments.map((i) => [i.id, i]))
-  for (const c of l.contributions) if (c.date <= cutoff) total += contributionEffect(c, invById.get(c.investmentId), a)
+  for (const c of l.contributions) if (c.date <= cutoff && afterOpening(a, c.date, c.createdAt)) total += contributionEffect(c, invById.get(c.investmentId), a)
   return total
 }
 

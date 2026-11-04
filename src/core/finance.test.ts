@@ -44,6 +44,23 @@ describe('ledger', () => {
     expect(netWorth(l).total).toEqual({ CRC: col(1_380_000), USD: 100_00 })
   })
 
+  it('ignores transactions before a re-set opening balance', () => {
+    const l = ledger({
+      transactions: [
+        tx({ kind: 'expense', amount: col(300_000), accountId: 'bank', date: '2026-03-05' }),
+        tx({ kind: 'expense', amount: col(10_000), accountId: 'bank', date: '2026-04-10', createdAt: 100 }), // same day, before re-set
+        tx({ kind: 'expense', amount: col(5_000), accountId: 'bank', date: '2026-04-10', createdAt: 300 }), // same day, after re-set
+        tx({ kind: 'income', amount: col(50_000), accountId: 'bank', date: '2026-04-12' }),
+      ],
+    })
+    const bank: Account = { ...l.accounts[0], openingBalance: col(700_000), openingDate: '2026-04-10', openingSetAt: 200 }
+    const l2 = { ...l, accounts: [bank, ...l.accounts.slice(1)] }
+    expect(balance(bank, l2)).toBe(col(700_000 - 5_000 + 50_000))
+    expect(balance(bank, l2, '2026-04-09')).toBe(0)
+    // Never re-set (older accounts): same-day transactions still count.
+    expect(balance({ ...bank, openingSetAt: undefined }, l2)).toBe(col(700_000 - 10_000 - 5_000 + 50_000))
+  })
+
   it('has no savings rate without income', () => {
     const s = summary([tx({ kind: 'expense', amount: 100, accountId: 'bank', date: '2026-03-05' })], monthRange('2026-03'), 'CRC')
     expect(s.savingsRate).toBeNull()
