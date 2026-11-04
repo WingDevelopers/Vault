@@ -397,7 +397,7 @@ export interface SalarySplit {
 }
 
 /**
- * Splits the monthly salary into expenses (actual, from records), investments and other buckets (set by hand),
+ * Splits the monthly salary into the expenses budget, investments and other buckets (all planned),
  * plus whatever is left unassigned, so the slices always add up to the salary.
  */
 export function salarySplit(plan: SalaryPlan | null, rules: FinanceData['rules'], expenses: Cents, target: Currency, rate: string): SalarySplit {
