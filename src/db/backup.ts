@@ -73,19 +73,19 @@ export async function makeBackup(): Promise<BackupFile> {
 export async function exportJSON(password: string | null): Promise<{ name: string; text: string }> {
   const backup = JSON.stringify(await makeBackup())
   const text = password ? JSON.stringify(await encryptText(backup, password)) : backup
-  return { name: `midnight-ledger-${today()}${password ? '.encrypted' : ''}.json`, text }
+  return { name: `walletwing-${today()}${password ? '.encrypted' : ''}.json`, text }
 }
 
 /** Parses a backup file. Returns `{ needsPassword: true }` for encrypted files without a password. */
 export async function readBackup(text: string, password?: string): Promise<BackupFile | { needsPassword: true }> {
   let parsed: unknown
-  try { parsed = JSON.parse(text) } catch { throw new Error("This file isn't a Midnight Ledger backup.") }
+  try { parsed = JSON.parse(text) } catch { throw new Error("This file isn't a WalletWing backup.") }
   const obj = parsed as { format?: string }
   if (obj?.format === ENCRYPTED_FORMAT) {
     if (!password) return { needsPassword: true }
     return readBackup(await decryptText(parsed as EncryptedFile, password))
   }
-  if (obj?.format !== BACKUP_FORMAT) throw new Error("This file isn't a Midnight Ledger backup.")
+  if (obj?.format !== BACKUP_FORMAT) throw new Error("This file isn't a WalletWing backup.")
   const b = parsed as BackupFile
   if (b.version > 1) throw new Error('This backup was made by a newer version of the app.')
   return b

@@ -19,6 +19,7 @@ export class LedgerDB extends Dexie {
   goalContributions!: Table<GoalContribution, string>
   reminders!: Table<Reminder, string>
 
+  // The database name stays 'midnight-ledger' so data saved before the rename to WalletWing is kept.
   constructor(name = 'midnight-ledger') {
     super(name)
     this.version(1).stores({
