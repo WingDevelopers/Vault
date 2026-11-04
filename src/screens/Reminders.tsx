@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { Bell, Check, ChevronRight, Plus, Repeat } from 'lucide-react'
 import { daysBetween, fmtDate, fmtDay, today } from '../core/dates'
-import { reminderDue } from '../core/finance'
+import { reminderDue, reminderState } from '../core/finance'
 import { DEFAULT_PAYDAYS, FREQUENCIES, type Frequency, type ISODate, type PayDays, type Reminder } from '../core/types'
 import { newId } from '../db/db'
-import { completeReminder, deleteReminder, saveReminder, undoCompleteReminder } from '../db/repo'
+import { completeReminder, deleteReminder, saveReminder, uncompleteReminder, undoCompleteReminder } from '../db/repo'
 import { haptic, useApp } from '../state'
 import { Confirm, EmptyState, Footnote, FormCard, FormRow, NavBar, SectionHeader, Sheet } from '../ui/components'
 import { describePaydays, PayDaysRows } from './Manage'
@@ -26,34 +26,53 @@ const repeatLabel = (r: Reminder) => {
   return FREQUENCIES.find((f) => f.id === r.repeat)?.title ?? ''
 }
 
-function activeSorted(reminders: Reminder[]) {
+interface Item { r: Reminder; date: ISODate | null; done: boolean }
+
+/** Pending reminders first (by due date), then ones checked off this cycle (by renewal date). */
+function items(reminders: Reminder[]): Item[] {
+  const t = today()
   return reminders
-    .map((r) => ({ r, due: reminderDue(r) }))
-    .filter((x): x is { r: Reminder; due: ISODate } => x.due !== null)
-    .sort((a, b) => (a.due === b.due ? a.r.createdAt - b.r.createdAt : a.due < b.due ? -1 : 1))
+    .map((r) => ({ r, ...reminderState(r, t) }))
+    // one-offs: keep showing for the day they were checked off
+    .filter((x) => !x.done || x.r.repeat || (x.r.doneAt && new Date(x.r.doneAt).toDateString() === new Date().toDateString()))
+    .sort((a, b) => {
+      if (a.done !== b.done) return a.done ? 1 : -1
+      const da = a.date ?? '9999', dbb = b.date ?? '9999'
+      return da === dbb ? a.r.createdAt - b.r.createdAt : da < dbb ? -1 : 1
+    })
 }
 
-function useComplete() {
+function useToggle() {
   const { toast } = useApp()
-  return async (r: Reminder) => {
+  return async (it: Item) => {
+    const r = it.r
+    if (it.done) {
+      haptic(6)
+      await uncompleteReminder(r)
+      return
+    }
     haptic(12)
     await completeReminder(r)
-    const next = r.repeat ? reminderDue({ ...r, index: r.index + 1 }) : null
-    toast(next ? `Done · next ${fmtDay(next)}` : 'Done', { label: 'Undo', run: () => undoCompleteReminder(r) })
+    const renews = r.repeat ? reminderDue({ ...r, index: r.index + 1 }) : null
+    toast(renews ? `Done · renews ${fmtDay(renews)}` : 'Done', { label: 'Undo', run: () => undoCompleteReminder(r) })
   }
 }
 
 // ---------- row ----------
 
-function ReminderRow({ r, due }: { r: Reminder; due: ISODate }) {
+function ReminderRow({ it }: { it: Item }) {
   const { openSheet } = useApp()
-  const complete = useComplete()
-  const label = dueLabel(due)
+  const toggle = useToggle()
+  const { r, date, done } = it
+  const label = done ? { text: date ? `Done · renews ${fmtDay(date)}` : 'Done', tone: 'pos' as const } : date ? dueLabel(date) : { text: '', tone: 'muted' as const }
   return (
     <div className="list-row">
-      <button className="check" aria-label={`Mark "${r.title}" done`} onClick={() => complete(r)}><Check size={15} strokeWidth={3} /></button>
+      <button className={`check ${done ? 'done' : ''}`} aria-pressed={done}
+        aria-label={done ? `Mark "${r.title}" not done` : `Mark "${r.title}" done`} onClick={() => toggle(it)}>
+        <Check size={15} strokeWidth={3} />
+      </button>
       <button className="main" style={{ textAlign: 'left', minWidth: 0 }} onClick={() => openSheet(<ReminderEditor reminder={r} />)}>
-        <div className="title">{r.title}</div>
+        <div className="title" style={done ? { color: 'var(--slate)', textDecoration: 'line-through' } : undefined}>{r.title}</div>
         <div className="sub row" style={{ gap: 6 }}>
           <span className={label.tone}>{label.text}</span>
           {r.repeat && <><span>·</span><Repeat size={11} aria-label="Repeats" /><span>{repeatLabel(r)}</span></>}
@@ -66,12 +85,16 @@ function ReminderRow({ r, due }: { r: Reminder; due: ISODate }) {
 
 // ---------- Home section ----------
 
-/** "To do" on Home: overdue and next-7-days reminders (or just the next one). */
+/** "To do" on Home: overdue and next-7-days reminders (or just the next one), plus this cycle's checked-off ones. */
 export function RemindersSection() {
   const { data, openSheet, push } = useApp()
-  const active = activeSorted(data.reminders)
-  const soon = active.filter((x) => daysBetween(today(), x.due) <= 7)
-  const shown = (soon.length ? soon : active).slice(0, 4)
+  const all = items(data.reminders)
+  const pending = all.filter((x) => !x.done)
+  const done = all.filter((x) => x.done)
+  const soon = pending.filter((x) => x.date && daysBetween(today(), x.date) <= 7)
+  const shownPending = (soon.length ? soon : pending.slice(0, 1)).slice(0, 4)
+  const shown = [...shownPending, ...done.slice(0, 4)]
+  const hiddenCount = pending.length - shownPending.length
 
   return (
     <div className="stack-s">
@@ -83,10 +106,10 @@ export function RemindersSection() {
       </SectionHeader>
       {shown.length ? (
         <div className="card list">
-          {shown.map(({ r, due }) => <ReminderRow key={r.id} r={r} due={due} />)}
-          {active.length > shown.length && (
+          {shown.map((it) => <ReminderRow key={it.r.id} it={it} />)}
+          {hiddenCount > 0 && (
             <button className="list-row muted small" onClick={() => push({ name: 'reminders' })}>
-              <span className="main">{active.length - shown.length} more coming up</span><ChevronRight size={16} />
+              <span className="main">{hiddenCount} more coming up</span><ChevronRight size={16} />
             </button>
           )}
         </div>
@@ -104,27 +127,36 @@ export function RemindersSection() {
 
 export function RemindersPage() {
   const { data, openSheet } = useApp()
-  const active = activeSorted(data.reminders)
-  const done = data.reminders.filter((r) => !r.repeat && r.doneAt).sort((a, b) => (b.doneAt ?? 0) - (a.doneAt ?? 0)).slice(0, 20)
+  const all = items(data.reminders)
+  const pending = all.filter((x) => !x.done)
+  const doneThisCycle = all.filter((x) => x.done)
+  const oneOffsDone = data.reminders.filter((r) => !r.repeat && r.doneAt && !doneThisCycle.some((x) => x.r.id === r.id))
+    .sort((a, b) => (b.doneAt ?? 0) - (a.doneAt ?? 0)).slice(0, 20)
   return (
     <div className="screen with-nav slide-in">
       <NavBar title="Reminders" back="Overview" right={<button className="link-btn" aria-label="Add reminder" onClick={() => openSheet(<ReminderEditor />)}><Plus size={22} /></button>} />
       <div className="stack">
-        {!active.length && (
+        {!pending.length && !doneThisCycle.length && (
           <div className="card"><EmptyState icon="star" title="Nothing to do" message="Add reminders for money tasks — moving money to Schwab, investing, paying a card."
             action="Add reminder" onAction={() => openSheet(<ReminderEditor />)} /></div>
         )}
-        {!!active.length && (
+        {!!pending.length && (
           <div className="stack-s" style={{ gap: 6 }}>
             <div className="caps">Upcoming</div>
-            <div className="card list">{active.map(({ r, due }) => <ReminderRow key={r.id} r={r} due={due} />)}</div>
+            <div className="card list">{pending.map((it) => <ReminderRow key={it.r.id} it={it} />)}</div>
           </div>
         )}
-        {!!done.length && (
+        {!!doneThisCycle.length && (
           <div className="stack-s" style={{ gap: 6 }}>
             <div className="caps">Done</div>
+            <div className="card list">{doneThisCycle.map((it) => <ReminderRow key={it.r.id} it={it} />)}</div>
+          </div>
+        )}
+        {!!oneOffsDone.length && (
+          <div className="stack-s" style={{ gap: 6 }}>
+            <div className="caps">Completed earlier</div>
             <div className="card list">
-              {done.map((r) => (
+              {oneOffsDone.map((r) => (
                 <div key={r.id} className="list-row">
                   <span className="check done" aria-hidden><Check size={15} strokeWidth={3} /></span>
                   <div className="main"><div className="title muted" style={{ textDecoration: 'line-through' }}>{r.title}</div><div className="sub">Due {fmtDate(r.startDate)}</div></div>
@@ -134,7 +166,7 @@ export function RemindersPage() {
             </div>
           </div>
         )}
-        <Footnote>Reminders show here and on Home. The app can't send phone notifications, since it has no server.</Footnote>
+        <Footnote>Repeating reminders stay checked until their next date, then come back unchecked. They show here and on Home — the app can't send phone notifications, since it has no server.</Footnote>
       </div>
     </div>
   )
@@ -157,7 +189,7 @@ export function ReminderEditor({ reminder }: { reminder?: Reminder }) {
       id: reminder?.id ?? newId(), title: title.trim(), note: note.trim(),
       // The schedule restarts from the date shown (the next due date), so past occurrences aren't repeated.
       startDate: date, repeat: repeat || null, days: repeat === 'semimonthly' ? days : null, index: 0,
-      doneAt: null, createdAt: reminder?.createdAt ?? Date.now(),
+      doneAt: null, lastDone: null, createdAt: reminder?.createdAt ?? Date.now(),
     })
     haptic()
     closeSheet()
