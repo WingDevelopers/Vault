@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { Pencil, Plus, X } from 'lucide-react'
-import { formatCompact, formatMoney, HIDDEN, parseAmount, SYMBOL, toInput } from '../core/money'
+import { convert, formatCompact, formatMoney, HIDDEN, parseAmount, SYMBOL, toInput } from '../core/money'
 import { monthlyRecurringIncome, salarySplit } from '../core/finance'
-import { viewCurrency, type Cents, type Currency, type SalaryPlan } from '../core/types'
+import { viewCurrency, type Cents, type Currency, type SalaryPlan, type Settings } from '../core/types'
 import { newId } from '../db/db'
 import { updateSettings } from '../db/repo'
 import { haptic, useApp } from '../state'
@@ -12,13 +12,20 @@ import { Donut } from '../ui/charts'
 const ITEM_COLORS = ['#B794F6', '#35D6A0', '#FFB86B', '#6C8CFF', '#FF8FB1', '#F4D35E', '#7FD1B9']
 const UNASSIGNED = '#8A9BB3'
 
-/** Home card: how the monthly salary splits into expenses (recorded), investments and other buckets (planned). */
-export function SalarySplitCard({ expenses, periodLabel }: { expenses: Cents; periodLabel: string }) {
-  const { data, openSheet } = useApp()
+/** Monthly spending budget (the allowance from the Budget tab), in `cur`. */
+function expensesBudget(s: Settings, cur: Currency): Cents | null {
+  if (s.monthlyAllowance == null) return null
+  return convert(s.monthlyAllowance, s.allowanceCurrency ?? s.primaryCurrency, cur, s.crcPerUSD)
+}
+
+/** Home card: how the monthly salary splits into the expenses budget, investments and other buckets — all planned. */
+export function SalarySplitCard() {
+  const { data, openSheet, setTab } = useApp()
   const s = data.settings
   const cur = viewCurrency(s)
   const hidden = s.hideAmounts
-  const split = salarySplit(s.salaryPlan, data.rules, expenses, cur, s.crcPerUSD)
+  const budget = expensesBudget(s, cur)
+  const split = salarySplit(s.salaryPlan, data.rules, budget ?? 0, cur, s.crcPerUSD)
   const money = (v: Cents) => (hidden ? HIDDEN : formatMoney(v, cur))
   const pct = (v: Cents) => (split.salary > 0 ? `${Math.round((v / split.salary) * 100)}%` : '')
   const rows = [...split.slices, ...(split.unassigned > 0 ? [{ key: 'left', label: 'Unassigned', value: split.unassigned, color: UNASSIGNED }] : [])]
@@ -59,9 +66,14 @@ export function SalarySplitCard({ expenses, periodLabel }: { expenses: Cents; pe
             </div>
           </div>
           {split.unassigned < 0 && (
-            <div className="footnote neg">Over your salary by {money(-split.unassigned)} — expenses plus your plan are more than you earn.</div>
+            <div className="footnote neg">Over your salary by {money(-split.unassigned)} — your expenses budget plus your plan are more than you earn.</div>
           )}
-          <Footnote>Salary {money(split.salary)}{s.salaryPlan?.salary != null ? '' : ' from your recurring income'}. Expenses are what you've recorded {periodLabel}; the rest is your plan.</Footnote>
+          {budget == null && (
+            <button className="footnote" style={{ color: 'var(--electric)', textAlign: 'left' }} onClick={() => setTab('budget')}>
+              Set a monthly spending budget in Budget to include expenses →
+            </button>
+          )}
+          <Footnote>Salary {money(split.salary)}{s.salaryPlan?.salary != null ? '' : ' from your recurring income'}. Expenses = your monthly spending budget.</Footnote>
         </div>
       )}
     </div>
@@ -78,8 +90,9 @@ export function SalaryPlanEditor() {
   const [invText, setInvText] = useState(plan?.investments ? toInput(plan.investments) : '')
   const [items, setItems] = useState(plan?.items.map((i) => ({ ...i, text: toInput(i.amount) })) ?? [])
 
+  const budget = expensesBudget(s, cur) ?? 0
   const salary = salaryText.trim() ? parseAmount(salaryText) ?? 0 : fromRules
-  const planned = (parseAmount(invText) ?? 0) + items.reduce((sum, i) => sum + (parseAmount(i.text) ?? 0), 0)
+  const planned = budget + (parseAmount(invText) ?? 0) + items.reduce((sum, i) => sum + (parseAmount(i.text) ?? 0), 0)
   const left = salary - planned
   const valid = salary > 0 && left >= 0 && items.every((i) => i.name.trim())
 
@@ -108,7 +121,10 @@ export function SalaryPlanEditor() {
             <DecimalField value={salaryText} onChange={setSalaryText} placeholder={fromRules > 0 ? toInput(fromRules) : '0'} width={150} /></FormRow>
         </FormCard>
 
-        <FormCard title="Plan" footer="Expenses aren't set here — they come from what you record each month.">
+        <FormCard title="Plan" footer="The expenses amount is your monthly spending budget — change it in the Budget tab.">
+          <FormRow label={<span className="row" style={{ gap: 8 }}><span className="legend-dot" style={{ background: '#FF6B78' }} />Expenses budget</span>}>
+            <span className="num muted">{s.monthlyAllowance == null ? 'Not set' : formatMoney(budget, cur)}</span>
+          </FormRow>
           <FormRow label={<span className="row" style={{ gap: 8 }}><span className="legend-dot" style={{ background: '#38CFFF' }} />Investments</span>}>
             <span className="muted">{SYMBOL[cur]}</span><DecimalField value={invText} onChange={setInvText} width={130} />
           </FormRow>
@@ -130,9 +146,9 @@ export function SalaryPlanEditor() {
 
         <div className="card tight stack-s" style={{ gap: 6 }}>
           <div className="row-between small"><span className="muted">Salary</span><span className="num">{formatMoney(salary, cur)}</span></div>
-          <div className="row-between small"><span className="muted">Planned (investments + categories)</span><span className="num">{formatMoney(planned, cur)}</span></div>
+          <div className="row-between small"><span className="muted">Planned (expenses + investments + categories)</span><span className="num">{formatMoney(planned, cur)}</span></div>
           <div className="row-between small strong">
-            <span>{left >= 0 ? 'Left for expenses' : 'Over your salary'}</span>
+            <span>{left >= 0 ? 'Unassigned' : 'Over your salary'}</span>
             <span className={`num ${left < 0 ? 'neg' : ''}`}>{formatMoney(Math.abs(left), cur)}</span>
           </div>
         </div>

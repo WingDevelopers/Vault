@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { ChevronRight, Ellipsis, Plus } from 'lucide-react'
-import { formatPercent, nonZeroCurrencies, parseAmount, parseRate, SYMBOL, totalIn } from '../core/money'
+import { convert, formatPercent, nonZeroCurrencies, parseAmount, parseRate, SYMBOL, totalIn } from '../core/money'
 import { fmtDate, fmtDay, today } from '../core/dates'
 import { allocation, holding, portfolioHistory, portfolioTotals } from '../core/finance'
 import { ASSET_TYPES, CURRENCIES, viewCurrency, type AssetType, type Contribution, type Currency, type Investment, type Valuation } from '../core/types'
@@ -89,25 +89,40 @@ export function Investments() {
 
             <div className="stack-s">
               <SectionHeader title="Holdings" />
-              <div className="card list">
-                {investments.map((inv) => {
-                  const h = holding(inv, data)
-                  return (
-                    <button key={inv.id} className="list-row" onClick={() => push({ name: 'investment', id: inv.id })}>
-                      <CatIcon icon={ASSET_ICON[inv.assetType]} color={assetColor(inv.assetType)} />
-                      <div className="main">
-                        <div className="title">{inv.name}</div>
-                        <div className="sub">{assetTitle(inv.assetType)} · {h.lastValuationDate ? `valued ${fmtDay(h.lastValuationDate)}` : 'no market value yet'}</div>
-                      </div>
-                      <div className="end">
-                        <Amount value={h.value} currency={inv.currency} />
-                        {h.gain !== null && <div className="tiny"><Amount value={h.gain} currency={inv.currency} signed colored /></div>}
-                      </div>
-                      <ChevronRight size={16} className="muted" />
-                    </button>
-                  )
-                })}
-              </div>
+              {ASSET_TYPES.map(({ id: type }) => {
+                const group = investments.filter((inv) => inv.assetType === type)
+                if (!group.length) return null
+                const subtotal = group.reduce((sum, inv) => sum + convert(holding(inv, data).value, inv.currency, cur, settings.crcPerUSD), 0)
+                return (
+                  <div key={type} className="stack-s" style={{ gap: 6 }}>
+                    <div className="row-between" style={{ padding: '0 6px' }}>
+                      <span className="row caps" style={{ gap: 8, paddingLeft: 0 }}>
+                        <span className="legend-dot" style={{ background: assetColor(type) }} />{assetTitle(type)}
+                      </span>
+                      <Amount className="small muted" value={subtotal} currency={cur} />
+                    </div>
+                    <div className="card list">
+                      {group.map((inv) => {
+                        const h = holding(inv, data)
+                        return (
+                          <button key={inv.id} className="list-row" onClick={() => push({ name: 'investment', id: inv.id })}>
+                            <CatIcon icon={ASSET_ICON[inv.assetType]} color={assetColor(inv.assetType)} />
+                            <div className="main">
+                              <div className="title">{inv.name}</div>
+                              <div className="sub">{h.lastValuationDate ? `Valued ${fmtDay(h.lastValuationDate)}` : 'No market value yet'} · {inv.currency}</div>
+                            </div>
+                            <div className="end">
+                              <Amount value={h.value} currency={inv.currency} />
+                              {h.gain !== null && <div className="tiny"><Amount value={h.gain} currency={inv.currency} signed colored /></div>}
+                            </div>
+                            <ChevronRight size={16} className="muted" />
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           </>
         )}

@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { Plus } from 'lucide-react'
-import { CURRENCY_NAME, parseAmount, SYMBOL, toInput } from '../core/money'
+import { CURRENCY_NAME, formatMoney, parseAmount, SYMBOL, toInput } from '../core/money'
 import { addDays, fmtDay, today } from '../core/dates'
-import { balance, nextOccurrence } from '../core/finance'
+import { balance, monthlyEquivalent, nextOccurrence } from '../core/finance'
 import {
   ACCOUNT_KINDS, CURRENCIES, DEFAULT_PAYDAYS, FREQUENCIES,
   type PayDays, type Account, type AccountKind, type Category, type CategoryKind, type Currency, type Frequency, type RecurringRule, type TransactionKind,
@@ -361,7 +361,10 @@ export function RuleEditor({ rule }: { rule?: RecurringRule }) {
             </FormRow>
           )}
         </FormCard>
-        <FormCard footer={posted > 0 ? `Changes apply to future occurrences. ${posted} already posted are unchanged.` : startDate <= today() ? 'Occurrences from the first date until today are posted when you save.' : undefined}>
+        <FormCard footer={<>
+          {frequency === 'biweekly' && <div style={{ marginBottom: 4 }}>Every 2 weeks = 26 payments a year, so some months have 3{amount ? ` (≈ ${formatMoney(monthlyEquivalent(amount, 'biweekly'), currency)} a month on average)` : ''}. If you're paid on fixed days like the 15th and 30th, choose <b>Twice a month</b>.</div>}
+          {posted > 0 ? `Changes apply to future occurrences. ${posted} already posted are unchanged.` : startDate <= today() ? 'Occurrences from the first date until today are posted when you save.' : null}
+        </>}>
           <FormRow label="Repeats">
             <select className="field" value={frequency} onChange={(e) => setFrequency(e.target.value as Frequency)}>
               {FREQUENCIES.map((f) => <option key={f.id} value={f.id}>{f.title}</option>)}

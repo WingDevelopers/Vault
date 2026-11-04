@@ -92,8 +92,7 @@ export function Home() {
           {sum.includesConversions && <Footnote>Includes amounts converted at each transaction's recorded rate.</Footnote>}
         </div>
 
-        <SalarySplitCard expenses={period === 'custom' ? summary(data.transactions, monthRange(currentMonth()), cur).expenses : sum.expenses}
-          periodLabel={period === 'last' ? 'last month' : 'this month'} />
+        <SalarySplitCard />
 
         <div className="stack-s">
           <SectionHeader title="Primary goal" />
