@@ -106,7 +106,7 @@ export function SettingsPage() {
         </FormCard>
 
         <div className="small muted" style={{ textAlign: 'center', padding: '0 12px' }}>
-          Midnight Ledger {__APP_VERSION__}<br />No accounts. No servers. No analytics or tracking. Your financial data never leaves this device unless you export it.
+          WalletWing {__APP_VERSION__}<br />No accounts. No servers. No analytics or tracking. Your financial data never leaves this device unless you export it.
         </div>
       </div>
     </div>
@@ -211,7 +211,7 @@ export function BackupPage() {
         <input ref={jsonInput} type="file" accept=".json,application/json" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) pickJSON(f) }} />
 
         <FormCard title="Spreadsheet (CSV)" footer="Transactions only, for Excel or Numbers. CSV files are not encrypted. Import accepts the same columns: date (YYYY-MM-DD), type, amount, currency, account, to_account, to_amount, category, note, rate_crc_per_usd.">
-          <button className="form-row" style={{ width: '100%' }} onClick={() => saveFile(`midnight-ledger-transactions-${today()}.csv`, transactionsToCSV(data), 'text/csv')}>
+          <button className="form-row" style={{ width: '100%' }} onClick={() => saveFile(`walletwing-transactions-${today()}.csv`, transactionsToCSV(data), 'text/csv')}>
             <div className="label"><FileSpreadsheet size={18} />Export transactions (CSV)</div>
           </button>
           <button className="form-row" style={{ width: '100%' }} onClick={() => csvInput.current?.click()}>

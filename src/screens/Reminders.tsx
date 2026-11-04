@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { Bell, Check, ChevronRight, Plus, Repeat } from 'lucide-react'
 import { daysBetween, fmtDate, fmtDay, today } from '../core/dates'
-import { reminderDue, reminderState } from '../core/finance'
+import { reminderDue } from '../core/finance'
 import { DEFAULT_PAYDAYS, FREQUENCIES, type Frequency, type ISODate, type PayDays, type Reminder } from '../core/types'
 import { newId } from '../db/db'
-import { completeReminder, deleteReminder, saveReminder, uncompleteReminder, undoCompleteReminder } from '../db/repo'
+import { completeReminder, deleteReminder, saveReminder, undoCompleteReminder } from '../db/repo'
 import { haptic, useApp } from '../state'
 import { Confirm, EmptyState, Footnote, FormCard, FormRow, NavBar, SectionHeader, Sheet } from '../ui/components'
 import { describePaydays, PayDaysRows } from './Manage'
@@ -26,35 +26,23 @@ const repeatLabel = (r: Reminder) => {
   return FREQUENCIES.find((f) => f.id === r.repeat)?.title ?? ''
 }
 
-interface Item { r: Reminder; date: ISODate | null; done: boolean }
+interface Item { r: Reminder; date: ISODate }
 
-/** Pending reminders first (by due date), then ones checked off this cycle (by renewal date). */
-function items(reminders: Reminder[]): Item[] {
-  const t = today()
+/** Reminders not yet done, with the date they're (next) due, soonest first. */
+function pendingItems(reminders: Reminder[]): Item[] {
   return reminders
-    .map((r) => ({ r, ...reminderState(r, t) }))
-    // one-offs: keep showing for the day they were checked off
-    .filter((x) => !x.done || x.r.repeat || (x.r.doneAt && new Date(x.r.doneAt).toDateString() === new Date().toDateString()))
-    .sort((a, b) => {
-      if (a.done !== b.done) return a.done ? 1 : -1
-      const da = a.date ?? '9999', dbb = b.date ?? '9999'
-      return da === dbb ? a.r.createdAt - b.r.createdAt : da < dbb ? -1 : 1
-    })
+    .map((r) => ({ r, date: reminderDue(r) }))
+    .filter((x): x is Item => x.date !== null)
+    .sort((a, b) => (a.date === b.date ? a.r.createdAt - b.r.createdAt : a.date < b.date ? -1 : 1))
 }
 
-function useToggle() {
+function useComplete() {
   const { toast } = useApp()
-  return async (it: Item) => {
-    const r = it.r
-    if (it.done) {
-      haptic(6)
-      await uncompleteReminder(r)
-      return
-    }
+  return async (r: Reminder) => {
     haptic(12)
     await completeReminder(r)
-    const renews = r.repeat ? reminderDue({ ...r, index: r.index + 1 }) : null
-    toast(renews ? `Done · renews ${fmtDay(renews)}` : 'Done', { label: 'Undo', run: () => undoCompleteReminder(r) })
+    const next = r.repeat ? reminderDue({ ...r, index: r.index + 1 }) : null
+    toast(next ? `Done · back on ${fmtDay(next)}` : 'Done', { label: 'Undo', run: () => undoCompleteReminder(r) })
   }
 }
 
@@ -62,17 +50,14 @@ function useToggle() {
 
 function ReminderRow({ it }: { it: Item }) {
   const { openSheet } = useApp()
-  const toggle = useToggle()
-  const { r, date, done } = it
-  const label = done ? { text: date ? `Done · renews ${fmtDay(date)}` : 'Done', tone: 'pos' as const } : date ? dueLabel(date) : { text: '', tone: 'muted' as const }
+  const complete = useComplete()
+  const { r, date } = it
+  const label = dueLabel(date)
   return (
     <div className="list-row">
-      <button className={`check ${done ? 'done' : ''}`} aria-pressed={done}
-        aria-label={done ? `Mark "${r.title}" not done` : `Mark "${r.title}" done`} onClick={() => toggle(it)}>
-        <Check size={15} strokeWidth={3} />
-      </button>
+      <button className="check" aria-label={`Mark "${r.title}" done`} onClick={() => complete(r)}><Check size={15} strokeWidth={3} /></button>
       <button className="main" style={{ textAlign: 'left', minWidth: 0 }} onClick={() => openSheet(<ReminderEditor reminder={r} />)}>
-        <div className="title" style={done ? { color: 'var(--slate)', textDecoration: 'line-through' } : undefined}>{r.title}</div>
+        <div className="title">{r.title}</div>
         <div className="sub row" style={{ gap: 6 }}>
           <span className={label.tone}>{label.text}</span>
           {r.repeat && <><span>·</span><Repeat size={11} aria-label="Repeats" /><span>{repeatLabel(r)}</span></>}
@@ -85,16 +70,15 @@ function ReminderRow({ it }: { it: Item }) {
 
 // ---------- Home section ----------
 
-/** "To do" on Home: overdue and next-7-days reminders (or just the next one), plus this cycle's checked-off ones. */
+/**
+ * "To do" on Home: only reminders that are due today or overdue. Checking one off makes it disappear;
+ * a repeating one comes back on its next date.
+ */
 export function RemindersSection() {
   const { data, openSheet, push } = useApp()
-  const all = items(data.reminders)
-  const pending = all.filter((x) => !x.done)
-  const done = all.filter((x) => x.done)
-  const soon = pending.filter((x) => x.date && daysBetween(today(), x.date) <= 7)
-  const shownPending = (soon.length ? soon : pending.slice(0, 1)).slice(0, 4)
-  const shown = [...shownPending, ...done.slice(0, 4)]
-  const hiddenCount = pending.length - shownPending.length
+  const pending = pendingItems(data.reminders)
+  const due = pending.filter((x) => x.date <= today())
+  const next = pending.find((x) => x.date > today())
 
   return (
     <div className="stack-s">
@@ -104,15 +88,17 @@ export function RemindersSection() {
           <button className="link-btn" aria-label="Add reminder" onClick={() => openSheet(<ReminderEditor />)}><Plus size={20} /></button>
         </div>
       </SectionHeader>
-      {shown.length ? (
-        <div className="card list">
-          {shown.map((it) => <ReminderRow key={it.r.id} it={it} />)}
-          {hiddenCount > 0 && (
-            <button className="list-row muted small" onClick={() => push({ name: 'reminders' })}>
-              <span className="main">{hiddenCount} more coming up</span><ChevronRight size={16} />
-            </button>
-          )}
-        </div>
+      {due.length ? (
+        <div className="card list">{due.map((it) => <ReminderRow key={it.r.id} it={it} />)}</div>
+      ) : next ? (
+        <button className="card row" style={{ textAlign: 'left' }} onClick={() => push({ name: 'reminders' })}>
+          <span className="check done" aria-hidden><Check size={15} strokeWidth={3} /></span>
+          <span className="small" style={{ flex: 1, minWidth: 0 }}>
+            <span className="strong">All done for now.</span>{' '}
+            <span className="muted">Next: {next.r.title} · {fmtDay(next.date)}</span>
+          </span>
+          <ChevronRight size={16} className="muted" />
+        </button>
       ) : (
         <button className="card row" style={{ textAlign: 'left' }} onClick={() => openSheet(<ReminderEditor />)}>
           <span className="icon-btn" style={{ flex: 'none' }}><Bell size={17} /></span>
@@ -127,36 +113,35 @@ export function RemindersSection() {
 
 export function RemindersPage() {
   const { data, openSheet } = useApp()
-  const all = items(data.reminders)
-  const pending = all.filter((x) => !x.done)
-  const doneThisCycle = all.filter((x) => x.done)
-  const oneOffsDone = data.reminders.filter((r) => !r.repeat && r.doneAt && !doneThisCycle.some((x) => x.r.id === r.id))
-    .sort((a, b) => (b.doneAt ?? 0) - (a.doneAt ?? 0)).slice(0, 20)
+  const pending = pendingItems(data.reminders)
+  const due = pending.filter((x) => x.date <= today())
+  const upcoming = pending.filter((x) => x.date > today())
+  const done = data.reminders.filter((r) => !r.repeat && r.doneAt).sort((a, b) => (b.doneAt ?? 0) - (a.doneAt ?? 0)).slice(0, 20)
   return (
     <div className="screen with-nav slide-in">
       <NavBar title="Reminders" back="Overview" right={<button className="link-btn" aria-label="Add reminder" onClick={() => openSheet(<ReminderEditor />)}><Plus size={22} /></button>} />
       <div className="stack">
-        {!pending.length && !doneThisCycle.length && (
+        {!pending.length && (
           <div className="card"><EmptyState icon="star" title="Nothing to do" message="Add reminders for money tasks — moving money to Schwab, investing, paying a card."
             action="Add reminder" onAction={() => openSheet(<ReminderEditor />)} /></div>
         )}
-        {!!pending.length && (
+        {!!due.length && (
+          <div className="stack-s" style={{ gap: 6 }}>
+            <div className="caps">Due now</div>
+            <div className="card list">{due.map((it) => <ReminderRow key={it.r.id} it={it} />)}</div>
+          </div>
+        )}
+        {!!upcoming.length && (
           <div className="stack-s" style={{ gap: 6 }}>
             <div className="caps">Upcoming</div>
-            <div className="card list">{pending.map((it) => <ReminderRow key={it.r.id} it={it} />)}</div>
+            <div className="card list">{upcoming.map((it) => <ReminderRow key={it.r.id} it={it} />)}</div>
           </div>
         )}
-        {!!doneThisCycle.length && (
+        {!!done.length && (
           <div className="stack-s" style={{ gap: 6 }}>
-            <div className="caps">Done</div>
-            <div className="card list">{doneThisCycle.map((it) => <ReminderRow key={it.r.id} it={it} />)}</div>
-          </div>
-        )}
-        {!!oneOffsDone.length && (
-          <div className="stack-s" style={{ gap: 6 }}>
-            <div className="caps">Completed earlier</div>
+            <div className="caps">Completed</div>
             <div className="card list">
-              {oneOffsDone.map((r) => (
+              {done.map((r) => (
                 <div key={r.id} className="list-row">
                   <span className="check done" aria-hidden><Check size={15} strokeWidth={3} /></span>
                   <div className="main"><div className="title muted" style={{ textDecoration: 'line-through' }}>{r.title}</div><div className="sub">Due {fmtDate(r.startDate)}</div></div>
@@ -166,7 +151,7 @@ export function RemindersPage() {
             </div>
           </div>
         )}
-        <Footnote>Repeating reminders stay checked until their next date, then come back unchecked. They show here and on Home — the app can't send phone notifications, since it has no server.</Footnote>
+        <Footnote>Home shows only what's due today or overdue. When you check off a repeating reminder it disappears and comes back on its next date. The app can't send phone notifications, since it has no server.</Footnote>
       </div>
     </div>
   )

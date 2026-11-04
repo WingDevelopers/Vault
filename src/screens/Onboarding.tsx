@@ -99,7 +99,7 @@ export function Onboarding() {
             <>
               <div style={{ marginTop: 40 }}><BrandMark size={72} /></div>
               <div className="stack-s" style={{ gap: 6 }}>
-                <h1 className="rounded" style={{ margin: 0, fontSize: 36 }}>Midnight Ledger</h1>
+                <h1 className="rounded" style={{ margin: 0, fontSize: 36 }}>WalletWing</h1>
                 <div className="muted" style={{ fontSize: 19 }}>Financial clarity without complexity.</div>
               </div>
               <div className="stack-s" style={{ gap: 18, marginTop: 16 }}>

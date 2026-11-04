@@ -27,7 +27,7 @@ export function LockScreen({ onUnlock }: { onUnlock: () => void }) {
   return (
     <div className="overlay-full fade-in">
       <BrandMark size={64} />
-      <div className="strong" style={{ fontSize: 20 }}>Midnight Ledger is locked</div>
+      <div className="strong" style={{ fontSize: 20 }}>WalletWing is locked</div>
       <div className="muted small">Enter your PIN{lock.credentialId ? ' or use Face ID' : ''}</div>
       <div className={`pin-dots ${shake ? 'shake' : ''}`} aria-label={`${pin.length} digits entered`}>
         {Array.from({ length: Math.max(4, pin.length) }, (_, i) => <span key={i} className={i < pin.length ? 'on' : ''} />)}
@@ -47,7 +47,7 @@ export function PrivacyShield() {
   return (
     <div className="overlay-full" aria-hidden>
       <BrandMark size={64} />
-      <div className="strong">Midnight Ledger</div>
+      <div className="strong">WalletWing</div>
     </div>
   )
 }
