@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { ChartColumn, Flag, LayoutGrid, List, Plus, TrendingUp } from 'lucide-react'
 import { AppProvider, haptic, useApp, type Tab } from './state'
 import { runRecurring } from './db/repo'
+import { refreshRate } from './rates'
 import { SheetHost, Toast } from './ui/components'
 import { Home } from './screens/Home'
 import { Activity } from './screens/Activity'
@@ -13,13 +14,14 @@ import { AccountsPage, CategoriesPage, RecurringPage } from './screens/Manage'
 import { TransactionEditor } from './screens/TransactionEditor'
 import { Onboarding } from './screens/Onboarding'
 import { LockScreen, PrivacyShield } from './screens/Lock'
+import { RemindersPage } from './screens/Reminders'
 
 const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
-  { id: 'home', label: 'Home', icon: <LayoutGrid size={22} /> },
-  { id: 'activity', label: 'Activity', icon: <List size={22} /> },
-  { id: 'budget', label: 'Budget', icon: <ChartColumn size={22} /> },
-  { id: 'investments', label: 'Investments', icon: <TrendingUp size={22} /> },
-  { id: 'goals', label: 'Goals', icon: <Flag size={22} /> },
+  { id: 'home', label: 'Home', icon: <LayoutGrid size={21} /> },
+  { id: 'activity', label: 'Activity', icon: <List size={21} /> },
+  { id: 'budget', label: 'Budget', icon: <ChartColumn size={21} /> },
+  { id: 'investments', label: 'Investments', icon: <TrendingUp size={21} /> },
+  { id: 'goals', label: 'Goals', icon: <Flag size={21} /> },
 ]
 
 function Shell() {
@@ -34,7 +36,7 @@ function Shell() {
       const hidden = document.visibilityState === 'hidden'
       setBackground(hidden)
       if (hidden && data.settings.lock.enabled) setLocked(true)
-      if (!hidden) runRecurring()
+      if (!hidden) { runRecurring(); refreshRate() }
     }
     document.addEventListener('visibilitychange', onVis)
     window.addEventListener('pagehide', onVis)
@@ -56,6 +58,7 @@ function Shell() {
       case 'activity': content = <Activity pushed />; break
       case 'investment': content = <InvestmentDetail id={page.id} />; break
       case 'goal': content = <GoalDetail id={page.id} />; break
+      case 'reminders': content = <RemindersPage />; break
     }
   } else {
     content = tab === 'home' ? <Home /> : tab === 'activity' ? <Activity /> : tab === 'budget' ? <BudgetScreen /> : tab === 'investments' ? <Investments /> : <Goals />
@@ -64,7 +67,7 @@ function Shell() {
   return (
     <div className="app">
       <main key={page ? `${page.name}-${stack.length}` : tab} style={{ display: 'contents' }}>{content}</main>
-      {!sheets.length && (!page || ['activity', 'investment', 'goal'].includes(page.name)) && (
+      {!sheets.length && (!page || ['activity', 'investment', 'goal', 'reminders'].includes(page.name)) && (
         <button className="fab" aria-label="Add transaction" onClick={() => { haptic(); openSheet(<TransactionEditor />) }}><Plus size={28} strokeWidth={2.4} /></button>
       )}
       <nav className="tabbar" aria-label="Main">

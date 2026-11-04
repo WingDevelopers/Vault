@@ -43,6 +43,12 @@ export function addDays(d: ISODate, n: number): ISODate {
   return toISODate(new Date(y, m - 1, day + n))
 }
 
+/** Whole days from a to b (b − a). */
+export function daysBetween(a: ISODate, b: ISODate): number {
+  const [ay, am, ad] = parts(a), [by, bm, bd] = parts(b)
+  return Math.round((Date.UTC(by, bm - 1, bd) - Date.UTC(ay, am - 1, ad)) / 86_400_000)
+}
+
 export function monthsBetween(a: MonthKey, b: MonthKey): number {
   const [ay, am] = a.split('-').map(Number)
   const [by, bm] = b.split('-').map(Number)

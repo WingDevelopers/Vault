@@ -1,9 +1,9 @@
 import { addTo, convert, emptyTotals, sumTotals, totalIn, type Totals } from './money'
 import { addDays, addMonths, addMonthsToKey, currentMonth, daysInMonth, inRange, monthEnd, monthKey, monthRange, monthsBetween, today, type DateRange } from './dates'
 import {
-  isAvailableCash,
+  isAvailableCash, viewCurrency,
   type Account, type AssetType, type Cents, type Contribution, type Currency, type FinanceData, type Frequency,
-  type GoalContribution, type ISODate, type Investment, type MonthKey, type PayDays, type Transaction,
+  type GoalContribution, type ISODate, type Investment, type MonthKey, type PayDays, type Reminder, type Transaction,
   DEFAULT_PAYDAYS,
 } from './types'
 
@@ -107,8 +107,7 @@ function monthsWindow(n: number, now: ISODate): MonthKey[] {
 const monthCutoff = (m: MonthKey, now: ISODate) => (m === monthKey(now) ? now : monthEnd(m))
 
 /** Month-end net worth, converted at the current rate (stated in the UI). */
-export function netWorthHistory(l: Ledger, months = 12, now: ISODate = today()): Point[] {
-  const target = l.settings.primaryCurrency
+export function netWorthHistory(l: Ledger, months = 12, now: ISODate = today(), target: Currency = viewCurrency(l.settings)): Point[] {
   const dates = [...l.accounts.map((a) => a.openingDate), ...l.transactions.map((t) => t.date), ...l.contributions.map((c) => c.date)]
   if (!dates.length) return []
   const first = monthKey(dates.reduce((a, b) => (a < b ? a : b)))
@@ -337,6 +336,32 @@ export function dueOccurrences(start: ISODate, f: Frequency, from: number, end: 
 export function nextOccurrence(start: ISODate, f: Frequency, index: number, end: ISODate | null, days: PayDays | null = null): ISODate | null {
   const d = occurrence(index, start, f, days)
   return end && d > end ? null : d
+}
+
+/**
+ * Income still expected in `range` from active recurring income rules: occurrences after `now`
+ * (earlier ones are already posted as transactions), converted to `target` at the current rate.
+ */
+export function expectedIncome(rules: FinanceData['rules'], range: DateRange, target: Currency, rate: string, now: ISODate = today()) {
+  let total = 0
+  const dates: ISODate[] = []
+  for (const r of rules) {
+    if (!r.active || r.kind !== 'income') continue
+    for (let i = r.generatedCount; i < r.generatedCount + 120; i++) {
+      const d = occurrence(i, r.startDate, r.frequency, r.days ?? null)
+      if ((r.endDate && d > r.endDate) || d > range.end) break
+      if (d <= now || d < range.start) continue
+      total += convert(r.amount, r.currency, target, rate)
+      dates.push(d)
+    }
+  }
+  return { total, dates: [...new Set(dates)].sort() }
+}
+
+/** When a reminder is next due, or null once a one-off reminder is done. */
+export function reminderDue(r: Reminder): ISODate | null {
+  if (!r.repeat) return r.doneAt ? null : r.startDate
+  return occurrence(r.index, r.startDate, r.repeat, r.days ?? null)
 }
 
 export function monthlyEquivalent(amount: Cents, f: Frequency): Cents {

@@ -3,11 +3,11 @@ import { ChevronRight, Ellipsis, Plus } from 'lucide-react'
 import { formatPercent, nonZeroCurrencies, parseAmount, parseRate, SYMBOL, totalIn } from '../core/money'
 import { fmtDate, fmtDay, today } from '../core/dates'
 import { allocation, holding, portfolioHistory, portfolioTotals } from '../core/finance'
-import { ASSET_TYPES, CURRENCIES, type AssetType, type Contribution, type Currency, type Investment, type Valuation } from '../core/types'
+import { ASSET_TYPES, CURRENCIES, viewCurrency, type AssetType, type Contribution, type Currency, type Investment, type Valuation } from '../core/types'
 import { newId } from '../db/db'
 import { deleteContribution, deleteInvestment, deleteValuation, saveContribution, saveInvestment, saveValuation } from '../db/repo'
 import { haptic, useApp } from '../state'
-import { Amount, AmountInput, Confirm, DecimalField, EmptyState, Footnote, FormCard, FormRow, LargeTitle, NavBar, SectionHeader, Sheet } from '../ui/components'
+import { Amount, AmountInput, Confirm, CurrencyToggle, DecimalField, EmptyState, Footnote, FormCard, FormRow, LargeTitle, NavBar, SectionHeader, Sheet } from '../ui/components'
 import { AreaChart, CHART_PALETTE, Donut } from '../ui/charts'
 import { ASSET_ICON, CatIcon } from '../ui/icons'
 
@@ -17,7 +17,7 @@ const assetTitle = (t: AssetType) => ASSET_TYPES.find((a) => a.id === t)?.title 
 export function Investments() {
   const { data, openSheet, push } = useApp()
   const { settings } = data
-  const cur = settings.primaryCurrency
+  const cur = viewCurrency(settings)
   const hidden = settings.hideAmounts
   const totals = useMemo(() => portfolioTotals(data.investments, data), [data])
   const history = useMemo(() => portfolioHistory(data.investments, data, cur, settings.crcPerUSD), [data, cur, settings.crcPerUSD])
@@ -32,6 +32,7 @@ export function Investments() {
   return (
     <div className="screen fade-in">
       <LargeTitle title="Investments">
+        <CurrencyToggle />
         <button className="icon-btn" aria-label="Add investment" onClick={() => openSheet(<InvestmentEditor />)}><Plus size={18} /></button>
       </LargeTitle>
       <div className="stack" style={{ marginTop: 12 }}>
@@ -65,7 +66,7 @@ export function Investments() {
                   </div>
                 </>
               )}
-              {nonZeroCurrencies(totals.value).length > 1 && <Footnote>Converted at ₡{settings.crcPerUSD} per $1. Holdings keep their own currency.</Footnote>}
+              {nonZeroCurrencies(totals.value).some((c) => c !== cur) && <Footnote>Converted at ₡{settings.crcPerUSD} per $1. Holdings keep their own currency.</Footnote>}
               <Footnote>Gains only count once you enter a market value. Contributions are never shown as performance.</Footnote>
             </div>
 

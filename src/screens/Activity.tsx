@@ -3,9 +3,9 @@ import { ChevronLeft, ChevronRight, Ellipsis, Search, SlidersHorizontal, X } fro
 import { addMonthsToKey, currentMonth, fmtDayHeader, fmtMonth, inRange, monthRange } from '../core/dates'
 import { expensesByCategory, summary } from '../core/finance'
 import { toInput } from '../core/money'
-import type { TransactionKind } from '../core/types'
+import { viewCurrency, type TransactionKind } from '../core/types'
 import { useApp } from '../state'
-import { Amount, EmptyState, Footnote, LargeTitle, NavBar, Sheet } from '../ui/components'
+import { Amount, CurrencyToggle, EmptyState, Footnote, LargeTitle, NavBar, Sheet } from '../ui/components'
 import { BarList } from '../ui/charts'
 import { TransactionEditor, TransactionRow } from './TransactionEditor'
 
@@ -56,6 +56,7 @@ export function Activity({ pushed = false }: { pushed?: boolean }) {
     <div className={`screen ${pushed ? 'with-nav slide-in' : 'fade-in'}`}>
       {pushed ? <NavBar title="Activity" right={menu} /> : (
         <LargeTitle title="Activity">
+          <CurrencyToggle />
           <button className="icon-btn" aria-label="Filter" onClick={filterSheet} style={hasFilters ? { background: 'var(--electric)', color: 'var(--midnight)' } : undefined}><SlidersHorizontal size={17} /></button>
           {menu}
         </LargeTitle>
@@ -104,7 +105,7 @@ export function Activity({ pushed = false }: { pushed?: boolean }) {
 
 function MonthlyBreakdown({ month }: { month: string }) {
   const { data } = useApp()
-  const cur = data.settings.primaryCurrency
+  const cur = viewCurrency(data.settings)
   const range = monthRange(month)
   const s = summary(data.transactions, range, cur)
   const rows = [...expensesByCategory(data.transactions, range, cur).entries()]

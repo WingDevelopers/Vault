@@ -157,7 +157,7 @@ export function CategoriesPage() {
   )
 }
 
-export function CategoryEditor({ category, kind }: { category?: Category; kind: CategoryKind }) {
+export function CategoryEditor({ category, kind, onSaved }: { category?: Category; kind: CategoryKind; onSaved?: (id: string) => void }) {
   const { data, closeSheet, openSheet } = useApp()
   const [name, setName] = useState(category?.name ?? '')
   const [icon, setIcon] = useState(category?.icon ?? 'tag')
@@ -165,12 +165,14 @@ export function CategoryEditor({ category, kind }: { category?: Category; kind: 
 
   async function save() {
     if (!name.trim()) return
+    const id = category?.id ?? newId()
     await saveCategory({
-      id: category?.id ?? newId(), name: name.trim(), kind, icon, color, isDefault: category?.isDefault ?? false,
+      id, name: name.trim(), kind, icon, color, isDefault: category?.isDefault ?? false,
       sortOrder: category?.sortOrder ?? data.categories.filter((c) => c.kind === kind).length,
     })
     haptic()
     closeSheet()
+    onSaved?.(id)
   }
 
   return (

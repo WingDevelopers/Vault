@@ -5,6 +5,7 @@ import App from './App'
 import './styles.css'
 import { ensureSettings, runRecurring, seedCategoriesIfNeeded } from './db/repo'
 import { requestPersistence } from './db/db'
+import { refreshRate } from './rates'
 
 // Offline support: the service worker caches the whole app after the first visit.
 registerSW({ immediate: true })
@@ -14,6 +15,7 @@ async function boot() {
   await seedCategoriesIfNeeded()
   await runRecurring()
   requestPersistence()
+  refreshRate() // keeps ₡/$ current; runs in the background, silently skips when offline
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
       <App />

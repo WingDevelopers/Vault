@@ -112,7 +112,7 @@ export function TransactionEditor({ tx, initialKind = 'expense' }: { tx?: Transa
                   {c.name}
                 </button>
               ))}
-              <button className="chip dashed" onClick={() => openSheet(<CategoryEditor kind={catKind} />)}><Plus size={15} />New</button>
+              <button className="chip dashed" onClick={() => openSheet(<CategoryEditor kind={catKind} onSaved={setCategoryId} />)}><Plus size={15} />New</button>
             </div>
           </div>
         )}

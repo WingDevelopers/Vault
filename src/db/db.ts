@@ -1,6 +1,6 @@
 import Dexie, { type Table } from 'dexie'
 import type {
-  Account, Budget, Category, Contribution, FinanceData, Goal, GoalContribution, Investment, RecurringRule, Settings, Transaction, Valuation,
+  Account, Budget, Category, Contribution, FinanceData, Goal, GoalContribution, Investment, RecurringRule, Reminder, Settings, Transaction, Valuation,
 } from '../core/types'
 import { today } from '../core/dates'
 
@@ -17,6 +17,7 @@ export class LedgerDB extends Dexie {
   valuations!: Table<Valuation, string>
   goals!: Table<Goal, string>
   goalContributions!: Table<GoalContribution, string>
+  reminders!: Table<Reminder, string>
 
   constructor(name = 'midnight-ledger') {
     super(name)
@@ -33,6 +34,7 @@ export class LedgerDB extends Dexie {
       goals: 'id',
       goalContributions: 'id, goalId',
     })
+    this.version(2).stores({ reminders: 'id' })
   }
 }
 
@@ -41,13 +43,13 @@ export let db = new LedgerDB()
 export function useDatabase(instance: LedgerDB) { db = instance }
 
 export const DATA_TABLES = [
-  'accounts', 'categories', 'transactions', 'rules', 'budgets', 'investments', 'contributions', 'valuations', 'goals', 'goalContributions',
+  'accounts', 'categories', 'transactions', 'rules', 'budgets', 'investments', 'contributions', 'valuations', 'goals', 'goalContributions', 'reminders',
 ] as const
 export type DataTable = (typeof DATA_TABLES)[number]
 
 export function defaultSettings(): Settings {
   return {
-    id: 'app', primaryCurrency: 'CRC', crcPerUSD: '505', rateUpdatedAt: today(), monthlyAllowance: null, onboarded: false,
+    id: 'app', primaryCurrency: 'CRC', displayCurrency: null, allowanceCurrency: null, crcPerUSD: '505', rateUpdatedAt: today(), autoRate: true, rateSource: null, rateCheckedAt: null, monthlyAllowance: null, onboarded: false,
     hideAmounts: false, isDemo: false, lastAccountId: null, lock: { enabled: false, pinHash: null, pinSalt: null, credentialId: null },
   }
 }

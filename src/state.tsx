@@ -16,6 +16,9 @@ export type Page =
   | { name: 'activity' }
   | { name: 'investment'; id: string }
   | { name: 'goal'; id: string }
+  | { name: 'reminders' }
+
+export interface ToastAction { label: string; run: () => void }
 
 interface AppState {
   data: FinanceData
@@ -27,8 +30,8 @@ interface AppState {
   sheets: ReactNode[]
   openSheet: (node: ReactNode) => void
   closeSheet: () => void
-  toast: (msg: string) => void
-  toastMsg: string | null
+  toast: (msg: string, action?: ToastAction) => void
+  toastMsg: { text: string; action?: ToastAction } | null
 }
 
 const Ctx = createContext<AppState | null>(null)
@@ -38,16 +41,16 @@ export function AppProvider({ children }: { children: (ready: boolean) => ReactN
   const [tab, setTabState] = useState<Tab>('home')
   const [stack, setStack] = useState<Page[]>([])
   const [sheets, setSheets] = useState<ReactNode[]>([])
-  const [toastMsg, setToast] = useState<string | null>(null)
+  const [toastMsg, setToast] = useState<{ text: string; action?: ToastAction } | null>(null)
 
   const setTab = useCallback((t: Tab) => { setTabState(t); setStack([]) }, [])
   const push = useCallback((p: Page) => setStack((s) => [...s, p]), [])
   const pop = useCallback(() => setStack((s) => s.slice(0, -1)), [])
   const openSheet = useCallback((n: ReactNode) => setSheets((s) => [...s, n]), [])
   const closeSheet = useCallback(() => setSheets((s) => s.slice(0, -1)), [])
-  const toast = useCallback((m: string) => {
-    setToast(m)
-    window.setTimeout(() => setToast((cur) => (cur === m ? null : cur)), 2200)
+  const toast = useCallback((m: string, action?: ToastAction) => {
+    setToast({ text: m, action })
+    window.setTimeout(() => setToast((cur) => (cur?.text === m ? null : cur)), action ? 4500 : 2200)
   }, [])
 
   const value = useMemo(

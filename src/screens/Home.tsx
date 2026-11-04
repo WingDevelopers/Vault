@@ -1,23 +1,23 @@
 import { useMemo, useState } from 'react'
-import { ArrowDownLeft, ArrowUpRight, Banknote, Eye, EyeOff, Percent, Settings2, TrendingUp, Inbox, VenetianMask } from 'lucide-react'
-import { formatMoney, formatPercent, nonZeroCurrencies, totalIn, type Totals } from '../core/money'
-import { currentMonth, addMonthsToKey, fmtDate, fmtMonth, monthRange, monthStart, today, type DateRange } from '../core/dates'
-import { netWorth, netWorthHistory, summary, type Point } from '../core/finance'
-import type { Cents, Currency } from '../core/types'
+import { ArrowDownLeft, Info, ArrowUpRight, Banknote, Eye, EyeOff, Settings2, TrendingUp, VenetianMask } from 'lucide-react'
+import { convert, formatMoney, nonZeroCurrencies, totalIn, type Totals } from '../core/money'
+import { currentMonth, addMonthsToKey, daysInMonth, fmtDate, fmtMonth, monthRange, monthStart, today, type DateRange } from '../core/dates'
+import { makeProgress, netWorth, netWorthHistory, summary, type Point } from '../core/finance'
+import { viewCurrency, type Cents, type Currency } from '../core/types'
 import { updateSettings } from '../db/repo'
 import { haptic, useApp } from '../state'
-import { Amount, EmptyState, Footnote, LargeTitle, SectionHeader, Segmented } from '../ui/components'
+import { Amount, CurrencyToggle, EmptyState, Footnote, LargeTitle, ProgressBar, SectionHeader, Segmented } from '../ui/components'
 import { AreaChart } from '../ui/charts'
-import { TransactionEditor, TransactionRow } from './TransactionEditor'
 import { AccountEditor } from './Manage'
 import { GoalCard, GoalEditor } from './Goals'
+import { RemindersSection } from './Reminders'
 
 type PeriodKind = 'this' | 'last' | 'custom'
 
 export function Home() {
-  const { data, push, openSheet } = useApp()
+  const { data, push, openSheet, setTab } = useApp()
   const { settings } = data
-  const cur = settings.primaryCurrency
+  const cur = viewCurrency(settings)
   const [period, setPeriod] = useState<PeriodKind>('this')
   const [customStart, setCustomStart] = useState(monthStart(currentMonth()))
   const [customEnd, setCustomEnd] = useState(today())
@@ -29,7 +29,15 @@ export function Home() {
   const worth = useMemo(() => netWorth(data), [data])
   const history = useMemo(() => netWorthHistory(data), [data])
   const sum = useMemo(() => summary(data.transactions, range, cur), [data.transactions, range.start, range.end, cur]) // eslint-disable-line react-hooks/exhaustive-deps
-  const recent = useMemo(() => [...data.transactions].sort((a, b) => (a.date === b.date ? b.createdAt - a.createdAt : a.date < b.date ? 1 : -1)).slice(0, 6), [data.transactions])
+  // Expenses vs the monthly spending allowance (calendar months only).
+  const budgetTotal = period !== 'custom' && settings.monthlyAllowance
+    ? convert(settings.monthlyAllowance, settings.allowanceCurrency ?? settings.primaryCurrency, cur, settings.crcPerUSD) : null
+  const budget = budgetTotal ? makeProgress(budgetTotal, 0, sum.expenses) : null
+  const [cy, cm] = currentMonth().split('-').map(Number)
+  const monthPace = period === 'this' ? Number(today().slice(8)) / daysInMonth(cy, cm) : null
+  // Coral when over; amber when spending faster than the month is passing (or ≥80% used).
+  const budgetColor = !budget ? undefined : budget.status === 'over' ? 'var(--coral)'
+    : budget.status === 'approaching' || (monthPace !== null && budget.fraction > monthPace + 0.05) ? 'var(--amber)' : 'var(--electric)'
   const goal = data.goals.find((g) => g.isPrimary) ?? data.goals[0]
 
   const breakdown = (t: Totals) => (nonZeroCurrencies(t).length > 1 && !settings.hideAmounts
@@ -38,6 +46,7 @@ export function Home() {
   return (
     <div className="screen fade-in">
       <LargeTitle title="Overview">
+        <CurrencyToggle />
         <button className="icon-btn" aria-label={settings.hideAmounts ? 'Show amounts' : 'Hide amounts'}
           onClick={() => { haptic(); updateSettings({ hideAmounts: !settings.hideAmounts }) }}>
           {settings.hideAmounts ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -55,6 +64,9 @@ export function Home() {
 
         <NetWorthCard total={worth.total} history={history} currency={cur} rate={settings.crcPerUSD} rateDate={settings.rateUpdatedAt} />
 
+
+        <RemindersSection />
+
         <div className="stack-s">
           <Segmented value={period} onChange={setPeriod} options={[{ id: 'this', title: 'This month' }, { id: 'last', title: 'Last month' }, { id: 'custom', title: 'Custom' }]} />
           {period === 'custom' && (
@@ -68,13 +80,13 @@ export function Home() {
             <Metric label="Available cash" icon={<Banknote size={13} />} value={totalIn(worth.availableCash, cur, settings.crcPerUSD)} currency={cur} caption={breakdown(worth.availableCash)} />
             <Metric label="Portfolio" icon={<TrendingUp size={13} className="cyan" />} value={totalIn(worth.investments, cur, settings.crcPerUSD)} currency={cur} caption={breakdown(worth.investments)} />
             <Metric label="Income" icon={<ArrowDownLeft size={13} className="pos" />} value={sum.income} currency={cur} />
-            <Metric label="Expenses" icon={<ArrowUpRight size={13} className="neg" />} value={sum.expenses} currency={cur} />
-            <Metric label="Saved" icon={<Inbox size={13} className="accent" />} value={sum.savings} currency={cur} colored />
-            <div className="card tight metric">
-              <div className="label"><Percent size={13} className="accent" />Savings rate</div>
-              <div className="value num">{settings.hideAmounts ? '••' : formatPercent(sum.savingsRate)}</div>
-              {sum.income === 0 && <div className="tiny muted">No income in period</div>}
-            </div>
+            <Metric label="Expenses" icon={<ArrowUpRight size={13} className="neg" />} value={sum.expenses} currency={cur}
+              onClick={() => setTab('budget')}
+              progress={budget ? { fraction: budget.fraction, color: budgetColor, marker: monthPace } : undefined}
+              caption={budget ? (settings.hideAmounts ? `${Math.round(budget.fraction * 100)}% of budget`
+                : budget.remaining >= 0 ? `${formatMoney(budget.remaining, cur)} left of ${formatMoney(budget.available, cur)}`
+                : `${formatMoney(-budget.remaining, cur)} over ${formatMoney(budget.available, cur)}`)
+                : period === 'custom' ? undefined : 'Set a monthly budget →'} />
           </div>
           {sum.includesConversions && <Footnote>Includes amounts converted at each transaction's recorded rate.</Footnote>}
         </div>
@@ -88,28 +100,27 @@ export function Home() {
               action="Create goal" onAction={() => openSheet(<GoalEditor />)} /></div>
           )}
         </div>
-
-        <div className="stack-s">
-          <SectionHeader title="Recent activity"><button className="link-btn" style={{ fontSize: 15 }} onClick={() => push({ name: 'activity' })}>See all</button></SectionHeader>
-          {recent.length ? (
-            <div className="card list">
-              {recent.map((t) => <TransactionRow key={t.id} tx={t} onClick={() => openSheet(<TransactionEditor tx={t} />)} />)}
-            </div>
-          ) : (
-            <div className="card"><EmptyState icon="tag" title="No transactions yet" message="Tap + to record an expense in a few seconds." /></div>
-          )}
-        </div>
       </div>
     </div>
   )
 }
 
-function Metric({ label, icon, value, currency, caption, colored }: { label: string; icon: React.ReactNode; value: Cents; currency: Currency; caption?: string; colored?: boolean }) {
+function Metric({ label, icon, value, currency, caption, colored, info, progress, onClick }: {
+  label: string; icon: React.ReactNode; value: Cents; currency: Currency; caption?: string; colored?: boolean; info?: string
+  progress?: { fraction: number; color?: string; marker?: number | null }; onClick?: () => void
+}) {
+  const [open, setOpen] = useState(false)
   return (
-    <div className="card tight metric">
+    <div className="card tight metric" style={{ position: 'relative', cursor: onClick ? 'pointer' : undefined }} onClick={onClick}
+      role={onClick ? 'button' : undefined} tabIndex={onClick ? 0 : undefined}>
       <div className="label">{icon}{label}</div>
+      {info && (
+        <button className="info-btn" aria-label="How this is calculated" aria-expanded={open} onClick={(e) => { e.stopPropagation(); setOpen(!open) }}><Info size={14} /></button>
+      )}
       <Amount className="value" value={value} currency={currency} colored={colored} />
+      {progress && <ProgressBar fraction={progress.fraction} color={progress.color} marker={progress.marker} height={6} />}
       {caption && <div className="tiny muted">{caption}</div>}
+      {info && open && <div className="info-bubble fade-in" role="note" onClick={() => setOpen(false)}>{info}</div>}
     </div>
   )
 }
@@ -120,7 +131,7 @@ function NetWorthCard({ total, history, currency, rate, rateDate }: { total: Tot
   const [sel, setSel] = useState<Point | null>(null)
   const value = totalIn(total, currency, rate)
   const change = history.length >= 2 ? history[history.length - 1].value - history[history.length - 2].value : null
-  const multi = nonZeroCurrencies(total).length > 1
+  const multi = nonZeroCurrencies(total).some((c) => c !== currency)
   return (
     <div className="card hero stack-s">
       <div className="row-between">

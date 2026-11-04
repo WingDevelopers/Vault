@@ -24,9 +24,19 @@ export const DEFAULT_PAYDAYS: PayDays = [15, 31]
 export interface Settings {
   id: 'app'
   primaryCurrency: Currency
+  /** Currency totals are shown in right now (toggled from the screen header). Null → primary. */
+  displayCurrency: Currency | null
+  /** Currency the monthly allowance was set in. Null → primary (older data). */
+  allowanceCurrency: Currency | null
   /** Colones per 1 USD, decimal string, e.g. "505.25". */
   crcPerUSD: string
   rateUpdatedAt: ISODate
+  /** Fetch the public exchange rate automatically (the app's only network request). */
+  autoRate: boolean
+  /** Where the current rate came from, e.g. "BCCR (Hacienda)"; null when entered by hand. */
+  rateSource: string | null
+  /** Last automatic check (ms). */
+  rateCheckedAt: number | null
   monthlyAllowance: Cents | null
   onboarded: boolean
   hideAmounts: boolean
@@ -163,6 +173,23 @@ export interface GoalContribution {
   note: string
 }
 
+/** A to-do such as "Move money to Schwab". One-off, or repeating on a schedule. */
+export interface Reminder {
+  id: string
+  title: string
+  note: string
+  /** First due date (or the only one for one-off reminders). */
+  startDate: ISODate
+  /** null = one-off. */
+  repeat: Frequency | null
+  days?: PayDays | null
+  /** Which occurrence is currently pending (repeating reminders). */
+  index: number
+  /** One-off reminders: when it was completed. */
+  doneAt: number | null
+  createdAt: number
+}
+
 export interface FinanceData {
   settings: Settings
   accounts: Account[]
@@ -175,6 +202,7 @@ export interface FinanceData {
   valuations: Valuation[]
   goals: Goal[]
   goalContributions: GoalContribution[]
+  reminders: Reminder[]
 }
 
 export const ACCOUNT_KINDS: { id: AccountKind; title: string }[] = [
@@ -200,5 +228,8 @@ export const FREQUENCIES: { id: Frequency; title: string }[] = [
   { id: 'monthly', title: 'Monthly' },
   { id: 'yearly', title: 'Yearly' },
 ]
+
+/** Currency to show totals in. */
+export const viewCurrency = (s: Pick<Settings, 'displayCurrency' | 'primaryCurrency'>): Currency => s.displayCurrency ?? s.primaryCurrency
 
 export const isAvailableCash = (k: AccountKind) => k === 'bank' || k === 'cash'

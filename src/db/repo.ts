@@ -3,7 +3,7 @@ import { convert } from '../core/money'
 import { dueOccurrences } from '../core/finance'
 import { today } from '../core/dates'
 import type {
-  Account, Budget, Category, CategoryKind, Contribution, Goal, GoalContribution, Investment, RecurringRule, Settings, Transaction, Valuation,
+  Account, Budget, Category, CategoryKind, Contribution, Goal, GoalContribution, Investment, RecurringRule, Reminder, Settings, Transaction, Valuation,
 } from '../core/types'
 
 // ---------- Settings ----------
@@ -31,6 +31,17 @@ export const saveContribution = (c: Contribution) => db.contributions.put(c)
 export const saveValuation = (v: Valuation) => db.valuations.put(v)
 export const saveGoal = (g: Goal) => db.goals.put(g)
 export const saveGoalContribution = (c: GoalContribution) => db.goalContributions.put(c)
+
+export const saveReminder = (r: Reminder) => db.reminders.put(r)
+export const deleteReminder = (id: string) => db.reminders.delete(id)
+/** Marks the current occurrence done: repeating reminders move to the next date; one-offs are completed. */
+export async function completeReminder(r: Reminder) {
+  if (r.repeat) await db.reminders.update(r.id, { index: r.index + 1 })
+  else await db.reminders.update(r.id, { doneAt: Date.now() })
+}
+export async function undoCompleteReminder(r: Reminder) {
+  await db.reminders.update(r.id, { index: r.index, doneAt: r.doneAt })
+}
 
 export const deleteTransaction = (id: string) => db.transactions.delete(id)
 export const deleteRule = (id: string) => db.rules.delete(id) // posted transactions are kept

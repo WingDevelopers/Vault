@@ -2,13 +2,13 @@ import { describe, expect, it } from 'vitest'
 import { convert, formatMoney, groupInput, nextInput, parseAmount, toInput, totalIn } from './money'
 import { addMonths, monthRange } from './dates'
 import {
-  balance, budgetProgress, dueOccurrences, expensesByCategory, holding, netWorth, projectGoal, summary, type Ledger,
+  balance, budgetProgress, dueOccurrences, expectedIncome, reminderDue, expensesByCategory, holding, netWorth, netWorthHistory, projectGoal, summary, type Ledger,
 } from './finance'
 import type { Account, Contribution, Investment, Settings, Transaction } from './types'
 
 const settings: Settings = {
   id: 'app', primaryCurrency: 'CRC', crcPerUSD: '500', rateUpdatedAt: '2026-01-01', monthlyAllowance: null, onboarded: true,
-  hideAmounts: false, isDemo: false, lastAccountId: null, lock: { enabled: false, pinHash: null, pinSalt: null, credentialId: null },
+  displayCurrency: null, allowanceCurrency: null, autoRate: false, rateSource: null, rateCheckedAt: null, hideAmounts: false, isDemo: false, lastAccountId: null, lock: { enabled: false, pinHash: null, pinSalt: null, credentialId: null },
 }
 const acct = (id: string, currency: 'CRC' | 'USD', opening: number, kind: Account['kind'] = 'bank'): Account => ({
   id, name: id, kind, currency, openingBalance: opening, openingDate: '2026-01-01', archived: false, sortOrder: 0, createdAt: 0,
@@ -68,6 +68,29 @@ describe('ledger', () => {
     const t = netWorth(ledger()).total
     expect(t).toEqual({ CRC: col(1_000_000), USD: 100_00 })
     expect(totalIn(t, 'CRC', '500')).toBe(col(1_050_000))
+  })
+
+  it('shows totals in the selected display currency without changing stored amounts', () => {
+    const l = ledger({ settings: { ...settings, displayCurrency: 'USD' } })
+    const hist = netWorthHistory(l, 1, '2026-01-15')
+    expect(hist[0].value).toBe(2_100_00) // ₡1,000,000 / 500 + $100
+    expect(netWorth(l).total).toEqual({ CRC: col(1_000_000), USD: 100_00 })
+  })
+
+  it('adds income still expected this period from recurring rules', () => {
+    const rule = { id: 'r', title: 'Salary', kind: 'income' as const, amount: col(700_000), currency: 'CRC' as const, frequency: 'semimonthly' as const,
+      days: [15, 30] as [number, number], startDate: '2026-10-01', endDate: null, generatedCount: 2, active: true, accountId: 'bank',
+      destAccountId: null, categoryId: null, createdAt: 0 }
+    // posted: Oct 15, Oct 30. On Nov 3, both Nov paydays are still expected.
+    const e = expectedIncome([rule], monthRange('2026-11'), 'CRC', '500', '2026-11-03')
+    expect(e.total).toBe(col(1_400_000))
+    expect(e.dates).toEqual(['2026-11-15', '2026-11-30'])
+    // after the 15th is posted, only the 30th remains
+    expect(expectedIncome([{ ...rule, generatedCount: 3 }], monthRange('2026-11'), 'CRC', '500', '2026-11-16').total).toBe(col(700_000))
+    // past periods expect nothing; expenses and transfers are ignored; converts to USD
+    expect(expectedIncome([rule], monthRange('2026-10'), 'CRC', '500', '2026-11-03').total).toBe(0)
+    expect(expectedIncome([{ ...rule, kind: 'expense' }], monthRange('2026-11'), 'CRC', '500', '2026-11-03').total).toBe(0)
+    expect(expectedIncome([rule], monthRange('2026-11'), 'USD', '500', '2026-11-03').total).toBe(2_800_00)
   })
 
   it('computes balances as of a date', () => {
@@ -184,6 +207,13 @@ describe('recurrence', () => {
   it('keeps every-2-weeks as a 14-day cycle', () => {
     expect(dueOccurrences('2026-01-02', 'biweekly', 0, null, '2026-02-13').map((o) => o.date))
       .toEqual(['2026-01-02', '2026-01-16', '2026-01-30', '2026-02-13'])
+  })
+  it('tracks one-off and repeating reminders', () => {
+    const base = { id: 'x', title: 'Move money to Schwab', note: '', days: null, doneAt: null, createdAt: 0 }
+    expect(reminderDue({ ...base, startDate: '2026-11-15', repeat: null, index: 0 })).toBe('2026-11-15')
+    expect(reminderDue({ ...base, startDate: '2026-11-15', repeat: null, index: 0, doneAt: 1 })).toBeNull()
+    expect(reminderDue({ ...base, startDate: '2026-01-31', repeat: 'monthly', index: 1 })).toBe('2026-02-28')
+    expect(reminderDue({ ...base, startDate: '2026-11-01', repeat: 'semimonthly', days: [15, 31], index: 1 })).toBe('2026-11-30')
   })
   it('clamps month ends in leap years', () => {
     expect(addMonths('2028-01-31', 1)).toBe('2028-02-29')

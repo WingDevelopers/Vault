@@ -63,7 +63,7 @@ export function Onboarding() {
     }
     if (step === 4) {
       const a = parseAmount(allowance)
-      if (a && a > 0) await updateSettings({ monthlyAllowance: a })
+      if (a && a > 0) await updateSettings({ monthlyAllowance: a, allowanceCurrency: currency })
     }
     if (step === LAST) {
       const t = parseAmount(goal.target)

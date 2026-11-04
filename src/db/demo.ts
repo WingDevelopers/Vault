@@ -114,5 +114,5 @@ export async function loadDemoData(now = today()) {
     await db.goalContributions.bulkAdd(goalContribs)
   })
   const s = await getSettings()
-  await updateSettings({ primaryCurrency: 'CRC', crcPerUSD: '505', rateUpdatedAt: now, monthlyAllowance: col(650_000), onboarded: true, isDemo: true, lock: s.lock })
+  await updateSettings({ primaryCurrency: 'CRC', monthlyAllowance: col(650_000), allowanceCurrency: 'CRC', onboarded: true, isDemo: true, lock: s.lock })
 }

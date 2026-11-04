@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react'
-import { ChevronRight, Download, EyeOff, FileSpreadsheet, KeyRound, Landmark, LockKeyhole, Repeat, ScanFace, ShieldCheck, Tag, Upload, VenetianMask } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { RefreshCw, ChevronRight, Download, EyeOff, FileSpreadsheet, KeyRound, Landmark, LockKeyhole, Repeat, ScanFace, ShieldCheck, Tag, Upload, VenetianMask } from 'lucide-react'
 import { CURRENCY_NAME, parseRate, SYMBOL } from '../core/money'
 import { fmtDate, today } from '../core/dates'
 import { CURRENCIES, type Currency } from '../core/types'
@@ -10,6 +10,7 @@ import {
   applyCSVImport, cryptoAvailable, exportJSON, planCSVImport, readBackup, restoreBackup, saveFile, transactionsToCSV, type BackupFile, type CSVImportPlan,
 } from '../db/backup'
 import { biometricsAvailable, hashPin, lockSupported, registerBiometrics } from '../lock'
+import { refreshRate } from '../rates'
 import { haptic, useApp } from '../state'
 import { Confirm, DecimalField, Footnote, FormCard, FormRow, NavBar, Sheet, Switch } from '../ui/components'
 
@@ -23,6 +24,8 @@ export function SettingsPage() {
   const { data, push, openSheet, toast } = useApp()
   const s = data.settings
   const [rate, setRate] = useState(s.crcPerUSD)
+  const [updating, setUpdating] = useState(false)
+  useEffect(() => { setRate(s.crcPerUSD) }, [s.crcPerUSD])
   const rateChanged = parseRate(rate) !== null && parseRate(rate) !== s.crcPerUSD
   const empty = !data.accounts.length && !data.transactions.length
 
@@ -30,16 +33,35 @@ export function SettingsPage() {
     <div className="screen with-nav slide-in">
       <NavBar title="Settings" back="Overview" />
       <div className="stack">
-        <FormCard title="Currency" footer={`Rate last set ${fmtDate(s.rateUpdatedAt)}. Used for dashboard totals and new transactions; past transactions keep the rate recorded with them.`}>
+        <FormCard title="Currency" footer={`${s.autoRate && s.rateSource ? `Rate from ${s.rateSource}, ${fmtDate(s.rateUpdatedAt)}. Updates on its own a few times a day when online.` : `Rate set by hand on ${fmtDate(s.rateUpdatedAt)}.`} Used for totals and new transactions; past transactions keep the rate recorded with them.`}>
           <FormRow label="Primary currency">
-            <select className="field" value={s.primaryCurrency} onChange={(e) => updateSettings({ primaryCurrency: e.target.value as Currency })}>
+            <select className="field" value={s.primaryCurrency} onChange={(e) => updateSettings({ primaryCurrency: e.target.value as Currency, allowanceCurrency: s.allowanceCurrency ?? s.primaryCurrency })}>
               {CURRENCIES.map((c) => <option key={c} value={c}>{SYMBOL[c]} {CURRENCY_NAME[c]}</option>)}
             </select>
           </FormRow>
           <FormRow label="₡ per $1">
             <DecimalField value={rate} onChange={setRate} width={110} />
-            {rateChanged && <button className="link-btn strong" onClick={async () => { await updateSettings({ crcPerUSD: parseRate(rate)!, rateUpdatedAt: today() }); haptic(); toast('Rate updated') }}>Set</button>}
+            {rateChanged && <button className="link-btn strong" onClick={async () => {
+              // A hand-entered rate turns automatic updates off so it isn't overwritten.
+              await updateSettings({ crcPerUSD: parseRate(rate)!, rateUpdatedAt: today(), autoRate: false, rateSource: null }); haptic(); toast('Rate set · automatic updates off')
+            }}>Set</button>}
           </FormRow>
+          <FormRow label="Update automatically">
+            <Switch checked={s.autoRate} label="Update exchange rate automatically" onChange={async (on) => {
+              await updateSettings({ autoRate: on })
+              if (on) { const r = await refreshRate(true); if (r) { setRate(r.rate); toast(`₡${r.rate} per $1`) } else toast("Couldn't reach the rate service — will retry later") }
+            }} />
+          </FormRow>
+          {s.autoRate && (
+            <button className="form-row" style={{ width: '100%' }} disabled={updating} onClick={async () => {
+              setUpdating(true)
+              const r = await refreshRate(true)
+              setUpdating(false)
+              if (r) { setRate(r.rate); haptic(); toast(`Updated: ₡${r.rate} per $1`) } else toast("Couldn't reach the rate service. Check your connection.")
+            }}>
+              <div className="label" style={{ color: 'var(--electric)' }}><RefreshCw size={18} />{updating ? 'Updating…' : 'Update now'}</div>
+            </button>
+          )}
         </FormCard>
 
         <FormCard title="Manage">
@@ -269,6 +291,7 @@ function CSVPreview({ plan }: { plan: CSVImportPlan }) {
 export function PrivacyPage() {
   const items: [string, string][] = [
     ['Stored only on this device', 'Your records live in this browser\'s local database (IndexedDB) on your iPhone. There is no account, server, sync, analytics, advertising SDK or bank connection. Nothing is uploaded — the app works with Airplane Mode on.'],
+    ['One network request: the exchange rate', 'When "Update automatically" is on, the app downloads the public ₡/$ rate (BCCR via Hacienda\'s API, or ExchangeRate-API as a backup) a few times a day. It only receives the rate — none of your data is sent. Turn it off in Settings to stay fully offline.'],
     ['Encrypted at rest by iOS', 'iPhone encrypts its storage, including Safari and Home Screen app data, with keys tied to your device passcode. This requires a passcode to be set.'],
     ['App lock controls access, not encryption', 'The PIN / Face ID lock stops someone using your unlocked phone from opening the app. It does not add a separate layer of encryption to the database.'],
     ['Back up regularly', 'Deleting the Home Screen app, clearing website data, or an iOS storage clean-up can remove the data. Export a backup from time to time.'],

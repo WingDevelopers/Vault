@@ -3,7 +3,9 @@ import { ChevronLeft, Info } from 'lucide-react'
 import { formatMoney, groupInput, HIDDEN, nextInput, SYMBOL } from '../core/money'
 import type { BudgetStatus } from '../core/finance'
 import type { Cents, Currency } from '../core/types'
-import { useApp, useHidden } from '../state'
+import { haptic, useApp, useHidden } from '../state'
+import { updateSettings } from '../db/repo'
+import { viewCurrency } from '../core/types'
 import { Icon } from './icons'
 
 // ---------- Money ----------
@@ -23,6 +25,20 @@ export function Amount({ value, currency, signed, colored, className = '', style
 export function useMoney() {
   const hidden = useHidden()
   return (v: Cents, c: Currency, signed = false) => (hidden ? HIDDEN : formatMoney(v, c, { signed }))
+}
+
+/** Header pill that switches which currency totals are shown in (₡ ⇄ $). */
+export function CurrencyToggle() {
+  const { data } = useApp()
+  const s = data.settings
+  const cur = viewCurrency(s)
+  const next: Currency = cur === 'CRC' ? 'USD' : 'CRC'
+  return (
+    <button className="currency-toggle" aria-label={`Showing ${cur}. Switch to ${next}`}
+      onClick={() => { haptic(4); updateSettings({ displayCurrency: next }) }}>
+      <span className="sym">{SYMBOL[cur]}</span>{cur}
+    </button>
+  )
 }
 
 // ---------- Layout ----------
@@ -74,11 +90,15 @@ export function EmptyState({ icon, title, message, action, onAction }: { icon: s
   )
 }
 
-export function ProgressBar({ fraction, color = 'var(--electric)', height = 8 }: { fraction: number; color?: string; height?: number }) {
+/** `marker` (0–1) draws a thin tick, e.g. how far through the month we are. */
+export function ProgressBar({ fraction, color = 'var(--electric)', height = 8, marker }: { fraction: number; color?: string; height?: number; marker?: number | null }) {
   const pct = Math.max(0, Math.min(1, fraction)) * 100
   return (
-    <div className="progress" style={{ height }} role="progressbar" aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100}>
-      <div style={{ width: `${pct > 0 ? Math.max(pct, 2) : 0}%`, background: `linear-gradient(90deg, ${color}, ${color}cc)` }} />
+    <div className="progress" style={{ height, position: 'relative' }} role="progressbar" aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100}>
+      <div style={{ width: `${pct > 0 ? Math.max(pct, 2) : 0}%`, background: color, backgroundImage: 'linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,0.18))' }} />
+      {marker != null && marker > 0 && marker < 1 && (
+        <span aria-hidden style={{ position: 'absolute', top: 0, bottom: 0, left: `calc(${marker * 100}% - 1px)`, width: 2, background: 'rgba(244,247,252,0.75)', borderRadius: 1 }} />
+      )}
     </div>
   )
 }
@@ -214,5 +234,11 @@ export function Confirm({ title, message, confirmLabel, onConfirm, destructive =
 
 export function Toast() {
   const { toastMsg } = useApp()
-  return toastMsg ? <div className="toast" role="status">{toastMsg}</div> : null
+  if (!toastMsg) return null
+  return (
+    <div className="toast" role="status">
+      {toastMsg.text}
+      {toastMsg.action && <button className="toast-action" onClick={toastMsg.action.run}>{toastMsg.action.label}</button>}
+    </div>
+  )
 }

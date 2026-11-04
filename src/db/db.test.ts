@@ -1,10 +1,10 @@
 import 'fake-indexeddb/auto'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { LedgerDB, loadAll, useDatabase } from './db'
-import { deleteAccount, deleteCategory, eraseAll, runRecurring, seedCategoriesIfNeeded, ensureSettings, saveAccount, saveRule } from './repo'
+import { completeReminder, deleteAccount, deleteCategory, eraseAll, runRecurring, saveReminder, seedCategoriesIfNeeded, ensureSettings, saveAccount, saveRule, undoCompleteReminder } from './repo'
 import { applyCSVImport, exportJSON, planCSVImport, readBackup, restoreBackup, transactionsToCSV } from './backup'
 import { loadDemoData } from './demo'
-import { balance, netWorth } from '../core/finance'
+import { balance, netWorth, reminderDue } from '../core/finance'
 
 let i = 0
 beforeEach(async () => {
@@ -50,8 +50,20 @@ describe('data layer', () => {
     expect(d.transactions.some((t) => t.accountId === wallet.id || t.destAccountId === wallet.id)).toBe(false)
   })
 
+  it('completes repeating reminders by moving to the next date', async () => {
+    const r = { id: 'r1', title: 'Invest', note: '', startDate: '2026-11-15', repeat: 'monthly' as const, days: null, index: 0, doneAt: null, createdAt: 0 }
+    await saveReminder(r)
+    await completeReminder(r)
+    let d = await loadAll()
+    expect(reminderDue(d.reminders[0])).toBe('2026-12-15')
+    await undoCompleteReminder(r)
+    d = await loadAll()
+    expect(reminderDue(d.reminders[0])).toBe('2026-11-15')
+  })
+
   it('round-trips an encrypted JSON backup exactly', async () => {
     await loadDemoData('2026-06-15')
+    await saveReminder({ id: 'rm', title: 'Move money to Schwab', note: '₡700,000', startDate: '2026-06-30', repeat: 'monthly', days: null, index: 2, doneAt: null, createdAt: 1 })
     const before = await loadAll()
     const { text } = await exportJSON('correct horse battery')
     expect(text).not.toContain('Salary')
@@ -66,6 +78,7 @@ describe('data layer', () => {
     const after = await loadAll()
     expect(after.transactions.length).toBe(before.transactions.length)
     expect(netWorth(after).total).toEqual(netWorth(before).total)
+    expect(after.reminders).toEqual(before.reminders)
     const bank = after.accounts.find((a) => a.name === 'BAC Colones')!
     expect(balance(bank, after)).toBe(balance(before.accounts.find((a) => a.name === 'BAC Colones')!, before))
   })
