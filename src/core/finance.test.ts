@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { convert, formatMoney, groupInput, nextInput, parseAmount, toInput, totalIn } from './money'
 import { addMonths, monthRange } from './dates'
 import {
-  balance, budgetProgress, dueOccurrences, expectedIncome, reminderDue, expensesByCategory, holding, netWorth, netWorthHistory, projectGoal, summary, type Ledger,
+  balance, budgetProgress, dueOccurrences, expectedIncome, reminderDue, reminderState, expensesByCategory, holding, netWorth, netWorthHistory, projectGoal, summary, type Ledger,
 } from './finance'
 import type { Account, Contribution, Investment, Settings, Transaction } from './types'
 
@@ -214,6 +214,16 @@ describe('recurrence', () => {
     expect(reminderDue({ ...base, startDate: '2026-11-15', repeat: null, index: 0, doneAt: 1 })).toBeNull()
     expect(reminderDue({ ...base, startDate: '2026-01-31', repeat: 'monthly', index: 1 })).toBe('2026-02-28')
     expect(reminderDue({ ...base, startDate: '2026-11-01', repeat: 'semimonthly', days: [15, 31], index: 1 })).toBe('2026-11-30')
+  })
+  it('keeps a checked-off monthly reminder done until its next date, then renews it', () => {
+    const r = { id: 'x', title: 'Move money to Schwab', note: '', startDate: '2026-11-03', repeat: 'monthly' as const, days: null,
+      index: 1, lastDone: '2026-11-04', doneAt: null, createdAt: 0 }
+    expect(reminderState(r, '2026-11-04')).toEqual({ date: '2026-12-03', done: true })
+    expect(reminderState(r, '2026-12-02')).toEqual({ date: '2026-12-03', done: true })
+    expect(reminderState(r, '2026-12-03')).toEqual({ date: '2026-12-03', done: false }) // renewed
+    // never checked → pending (overdue), one-offs stay done
+    expect(reminderState({ ...r, index: 0, lastDone: null }, '2026-11-10')).toEqual({ date: '2026-11-03', done: false })
+    expect(reminderState({ ...r, repeat: null, index: 0, doneAt: 1 }, '2026-11-10')).toEqual({ date: null, done: true })
   })
   it('clamps month ends in leap years', () => {
     expect(addMonths('2028-01-31', 1)).toBe('2028-02-29')

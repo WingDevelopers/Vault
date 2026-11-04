@@ -364,6 +364,24 @@ export function reminderDue(r: Reminder): ISODate | null {
   return occurrence(r.index, r.startDate, r.repeat, r.days ?? null)
 }
 
+export interface ReminderState {
+  /** Pending: the due date. Done: the date it renews (repeating) or null (one-off). */
+  date: ISODate | null
+  /** Checked off for the current cycle. */
+  done: boolean
+}
+
+/**
+ * A repeating reminder that was checked off stays checked until its next date arrives,
+ * then "renews" and shows as pending again. One-off reminders stay done.
+ */
+export function reminderState(r: Reminder, now: ISODate = today()): ReminderState {
+  if (!r.repeat) return r.doneAt ? { date: null, done: true } : { date: r.startDate, done: false }
+  const next = occurrence(r.index, r.startDate, r.repeat, r.days ?? null)
+  if (r.lastDone && r.index > 0 && now < next) return { date: next, done: true }
+  return { date: next, done: false }
+}
+
 export function monthlyEquivalent(amount: Cents, f: Frequency): Cents {
   switch (f) {
     case 'weekly': return Math.round((amount * 52) / 12)

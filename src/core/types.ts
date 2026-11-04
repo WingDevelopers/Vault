@@ -187,6 +187,8 @@ export interface Reminder {
   index: number
   /** One-off reminders: when it was completed. */
   doneAt: number | null
+  /** Repeating reminders: day the last occurrence was checked off. It stays checked until the next date arrives. */
+  lastDone?: ISODate | null
   createdAt: number
 }
 
