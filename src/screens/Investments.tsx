@@ -94,7 +94,7 @@ export function Investments() {
                   const h = holding(inv, data)
                   return (
                     <button key={inv.id} className="list-row" onClick={() => push({ name: 'investment', id: inv.id })}>
-                      <CatIcon icon={ASSET_ICON[inv.assetType]} color="#38CFFF" />
+                      <CatIcon icon={ASSET_ICON[inv.assetType]} color={assetColor(inv.assetType)} />
                       <div className="main">
                         <div className="title">{inv.name}</div>
                         <div className="sub">{assetTitle(inv.assetType)} · {h.lastValuationDate ? `valued ${fmtDay(h.lastValuationDate)}` : 'no market value yet'}</div>

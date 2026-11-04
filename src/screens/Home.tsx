@@ -11,6 +11,7 @@ import { AreaChart } from '../ui/charts'
 import { AccountEditor } from './Manage'
 import { GoalCard, GoalEditor } from './Goals'
 import { RemindersSection } from './Reminders'
+import { SalarySplitCard } from './SalaryPlan'
 
 type PeriodKind = 'this' | 'last' | 'custom'
 
@@ -90,6 +91,9 @@ export function Home() {
           </div>
           {sum.includesConversions && <Footnote>Includes amounts converted at each transaction's recorded rate.</Footnote>}
         </div>
+
+        <SalarySplitCard expenses={period === 'custom' ? summary(data.transactions, monthRange(currentMonth()), cur).expenses : sum.expenses}
+          periodLabel={period === 'last' ? 'last month' : 'this month'} />
 
         <div className="stack-s">
           <SectionHeader title="Primary goal" />
