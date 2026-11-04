@@ -67,11 +67,14 @@ export function AccountEditor({ account, onSaved }: { account?: Account; onSaved
   const hasTx = !!account && data.transactions.some((t) => t.accountId === account.id || t.destAccountId === account.id)
   const txCount = account ? data.transactions.filter((t) => t.accountId === account.id || t.destAccountId === account.id).length : 0
   const valid = name.trim() !== '' && openingCents !== null
+  const earlier = account ? data.transactions.filter((t) => (t.accountId === account.id || t.destAccountId === account.id) && t.date < openingDate).length : 0
 
   async function save() {
     if (!valid) return
     const a: Account = {
       id: account?.id ?? newId(), name: name.trim(), kind, currency, openingBalance: openingCents ?? 0, openingDate, archived,
+      // Re-stamp only when the opening balance or date changes, so same-day transactions recorded earlier aren't counted twice.
+      openingSetAt: !account || account.openingBalance !== (openingCents ?? 0) || account.openingDate !== openingDate ? Date.now() : account.openingSetAt,
       sortOrder: account?.sortOrder ?? data.accounts.length, createdAt: account?.createdAt ?? Date.now(),
     }
     await saveAccount(a)
@@ -96,7 +99,7 @@ export function AccountEditor({ account, onSaved }: { account?: Account; onSaved
             </select>
           </FormRow>
         </FormCard>
-        <FormCard footer="The balance on that date. Later transactions adjust it.">
+        <FormCard footer={earlier > 0 ? `The balance on that date. ${earlier} earlier transaction${earlier === 1 ? ' is' : 's are'} already included in it and won’t change it; only later ones adjust it.` : 'The balance on that date. Only transactions after it adjust it.'}>
           <FormRow label="Opening balance"><span className="muted">{SYMBOL[currency]}</span><DecimalField value={opening} onChange={setOpening} width={160} /></FormRow>
           <FormRow label="Balance as of"><input type="date" className="field" value={openingDate} onChange={(e) => e.target.value && setOpeningDate(e.target.value)} /></FormRow>
         </FormCard>

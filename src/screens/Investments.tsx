@@ -237,7 +237,7 @@ export function InvestmentEditor({ investment }: { investment?: Investment }) {
     await saveInvestment(inv)
     if (!investment) {
       const amt = parseAmount(initial)
-      if (amt && amt > 0) await saveContribution({ id: newId(), investmentId: inv.id, date: today(), amount: amt, note: 'Initial', rate: data.settings.crcPerUSD, sourceAccountId: source || null })
+      if (amt && amt > 0) await saveContribution({ id: newId(), investmentId: inv.id, date: today(), amount: amt, note: 'Initial', rate: data.settings.crcPerUSD, sourceAccountId: source || null, createdAt: Date.now() })
       const v = parseAmount(value)
       if (value.trim() && v !== null && v >= 0) await saveValuation({ id: newId(), investmentId: inv.id, date: today(), value: v })
     }
@@ -296,7 +296,7 @@ function ContributionEditor({ inv, withdrawal }: { inv: Investment; withdrawal: 
 
   async function save() {
     if (!valid || !amount) return
-    await saveContribution({ id: newId(), investmentId: inv.id, date, amount: withdrawal ? -amount : amount, note, rate: rate ?? data.settings.crcPerUSD, sourceAccountId: accountId || null })
+    await saveContribution({ id: newId(), investmentId: inv.id, date, amount: withdrawal ? -amount : amount, note, rate: rate ?? data.settings.crcPerUSD, sourceAccountId: accountId || null, createdAt: Date.now() })
     haptic(); closeSheet()
   }
   return (

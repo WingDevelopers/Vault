@@ -43,7 +43,7 @@ export function Onboarding() {
   async function addAccount() {
     if (!acc.name.trim()) return
     await saveAccount({ id: newId(), name: acc.name.trim(), kind: acc.kind, currency: acc.currency, openingBalance: parseAmount(acc.balance) ?? 0,
-      openingDate: today(), archived: false, sortOrder: accounts.length, createdAt: Date.now() })
+      openingDate: today(), openingSetAt: Date.now(), archived: false, sortOrder: accounts.length, createdAt: Date.now() })
     setAcc({ ...acc, name: '', balance: '' })
     toast('Account added')
   }
