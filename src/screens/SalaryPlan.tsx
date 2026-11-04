@@ -6,7 +6,7 @@ import { viewCurrency, type Cents, type Currency, type SalaryPlan, type Settings
 import { newId } from '../db/db'
 import { updateSettings } from '../db/repo'
 import { haptic, useApp } from '../state'
-import { DecimalField, EmptyState, Footnote, FormCard, FormRow, SectionHeader, Sheet } from '../ui/components'
+import { DecimalField, EmptyState, FormCard, FormRow, SectionHeader, Sheet } from '../ui/components'
 import { Donut } from '../ui/charts'
 
 const ITEM_COLORS = ['#B794F6', '#35D6A0', '#FFB86B', '#6C8CFF', '#FF8FB1', '#F4D35E', '#7FD1B9']
@@ -46,8 +46,7 @@ export function SalarySplitCard() {
               <Donut slices={rows.map((r) => ({ value: Math.max(0, r.value), color: r.color, label: r.key }))} />
               <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', textAlign: 'center' }}>
                 <div>
-                  <div className="strong num" style={{ fontSize: 15 }}>{hidden ? '••••' : formatCompact(split.salary, cur)}</div>
-                  <div className="tiny muted">per month</div>
+                  <div className="strong num" style={{ fontSize: 16 }}>{hidden ? '••••' : formatCompact(split.salary, cur, true)}</div>
                 </div>
               </div>
             </div>
@@ -59,7 +58,7 @@ export function SalarySplitCard() {
                     <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.label}</span>
                   </span>
                   <span className="num" style={{ whiteSpace: 'nowrap' }}>
-                    {hidden ? pct(r.value) : <>{formatCompact(r.value, cur)} <span className="muted">{pct(r.value)}</span></>}
+                    <span className="muted">{pct(r.value)}</span>
                   </span>
                 </div>
               ))}
@@ -73,7 +72,6 @@ export function SalarySplitCard() {
               Set a monthly spending budget in Budget to include expenses →
             </button>
           )}
-          <Footnote>Salary {money(split.salary)}{s.salaryPlan?.salary != null ? '' : ' from your recurring income'}. Expenses = your monthly spending budget.</Footnote>
         </div>
       )}
     </div>

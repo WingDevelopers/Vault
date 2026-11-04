@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { ArrowDownLeft, Info, ArrowUpRight, Banknote, Eye, EyeOff, Settings2, TrendingUp, VenetianMask } from 'lucide-react'
 import { convert, formatMoney, nonZeroCurrencies, totalIn, type Totals } from '../core/money'
-import { currentMonth, addMonthsToKey, daysInMonth, fmtDate, fmtMonth, monthRange, monthStart, today, type DateRange } from '../core/dates'
+import { currentMonth, addMonthsToKey, daysInMonth, fmtMonth, monthRange, monthStart, today, type DateRange } from '../core/dates'
 import { makeProgress, netWorth, netWorthHistory, summary, type Point } from '../core/finance'
 import { viewCurrency, type Cents, type Currency } from '../core/types'
 import { updateSettings } from '../db/repo'
@@ -63,7 +63,7 @@ export function Home() {
             action="Add account" onAction={() => openSheet(<AccountEditor />)} /></div>
         )}
 
-        <NetWorthCard total={worth.total} history={history} currency={cur} rate={settings.crcPerUSD} rateDate={settings.rateUpdatedAt} />
+        <NetWorthCard total={worth.total} history={history} currency={cur} rate={settings.crcPerUSD} />
 
 
         <RemindersSection />
@@ -84,10 +84,7 @@ export function Home() {
             <Metric label="Expenses" icon={<ArrowUpRight size={13} className="neg" />} value={sum.expenses} currency={cur}
               onClick={() => setTab('budget')}
               progress={budget ? { fraction: budget.fraction, color: budgetColor, marker: monthPace } : undefined}
-              caption={budget ? (settings.hideAmounts ? `${Math.round(budget.fraction * 100)}% of budget`
-                : budget.remaining >= 0 ? `${formatMoney(budget.remaining, cur)} left of ${formatMoney(budget.available, cur)}`
-                : `${formatMoney(-budget.remaining, cur)} over ${formatMoney(budget.available, cur)}`)
-                : period === 'custom' ? undefined : 'Set a monthly budget →'} />
+              caption={budget || period === 'custom' ? undefined : 'Set a monthly budget →'} />
           </div>
           {sum.includesConversions && <Footnote>Includes amounts converted at each transaction's recorded rate.</Footnote>}
         </div>
@@ -128,7 +125,7 @@ function Metric({ label, icon, value, currency, caption, colored, info, progress
   )
 }
 
-function NetWorthCard({ total, history, currency, rate, rateDate }: { total: Totals; history: Point[]; currency: Currency; rate: string; rateDate: string }) {
+function NetWorthCard({ total, history, currency, rate }: { total: Totals; history: Point[]; currency: Currency; rate: string }) {
   const { data } = useApp()
   const hidden = data.settings.hideAmounts
   const [sel, setSel] = useState<Point | null>(null)
@@ -154,7 +151,6 @@ function NetWorthCard({ total, history, currency, rate, rateDate }: { total: Tot
       {multi && !hidden && (
         <>
           <div className="small strong" style={{ opacity: 0.85 }}>{nonZeroCurrencies(total).map((c) => formatMoney(total[c], c)).join('  ·  ')}</div>
-          <Footnote>Total at ₡{rate} per $1, set {fmtDate(rateDate)}.</Footnote>
         </>
       )}
     </div>
