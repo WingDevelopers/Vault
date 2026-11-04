@@ -3,7 +3,7 @@ import { addDays, addMonths, addMonthsToKey, currentMonth, daysInMonth, inRange,
 import {
   isAvailableCash, viewCurrency,
   type Account, type AssetType, type Cents, type Contribution, type Currency, type FinanceData, type Frequency,
-  type GoalContribution, type ISODate, type Investment, type MonthKey, type PayDays, type Reminder, type Transaction,
+  type GoalContribution, type ISODate, type Investment, type MonthKey, type PayDays, type Reminder, type SalaryPlan, type Transaction,
   DEFAULT_PAYDAYS,
 } from './types'
 
@@ -380,6 +380,34 @@ export function reminderState(r: Reminder, now: ISODate = today()): ReminderStat
   const next = occurrence(r.index, r.startDate, r.repeat, r.days ?? null)
   if (r.lastDone && r.index > 0 && now < next) return { date: next, done: true }
   return { date: next, done: false }
+}
+
+/** Monthly income from active recurring income rules (salary), converted to `target` at `rate`. */
+export function monthlyRecurringIncome(rules: FinanceData['rules'], target: Currency, rate: string): Cents {
+  return rules.filter((r) => r.active && r.kind === 'income')
+    .reduce((s, r) => s + convert(monthlyEquivalent(r.amount, r.frequency), r.currency, target, rate), 0)
+}
+
+export interface SalarySlice { key: string; label: string; value: Cents; color: string }
+export interface SalarySplit {
+  salary: Cents
+  slices: SalarySlice[]
+  /** salary − everything assigned; negative when the plan plus expenses exceed the salary. */
+  unassigned: Cents
+}
+
+/**
+ * Splits the monthly salary into expenses (actual, from records), investments and other buckets (set by hand),
+ * plus whatever is left unassigned, so the slices always add up to the salary.
+ */
+export function salarySplit(plan: SalaryPlan | null, rules: FinanceData['rules'], expenses: Cents, target: Currency, rate: string): SalarySplit {
+  const conv = (c: Cents) => convert(c, plan?.currency ?? target, target, rate)
+  const salary = plan?.salary != null ? conv(plan.salary) : monthlyRecurringIncome(rules, target, rate)
+  const slices: SalarySlice[] = [{ key: 'expenses', label: 'Expenses', value: expenses, color: '#FF6B78' }]
+  if (plan?.investments) slices.push({ key: 'investments', label: 'Investments', value: conv(plan.investments), color: '#38CFFF' })
+  for (const it of plan?.items ?? []) if (it.amount > 0) slices.push({ key: it.id, label: it.name, value: conv(it.amount), color: it.color })
+  const unassigned = salary - slices.reduce((s, x) => s + x.value, 0)
+  return { salary, slices, unassigned }
 }
 
 export function monthlyEquivalent(amount: Cents, f: Frequency): Cents {

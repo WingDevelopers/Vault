@@ -21,6 +21,18 @@ export type Frequency = 'weekly' | 'biweekly' | 'semimonthly' | 'monthly' | 'yea
 export type PayDays = [number, number]
 export const DEFAULT_PAYDAYS: PayDays = [15, 31]
 
+/** How the monthly salary is split, shown on Home. Expenses come from records; the rest is set by hand. */
+export interface SalaryPlan {
+  /** Currency the amounts below were entered in. */
+  currency: Currency
+  /** Monthly salary typed by hand; null = use recurring income rules. */
+  salary: Cents | null
+  /** Monthly investing target. */
+  investments: Cents
+  /** Other buckets, e.g. "Adventure fund", "Savings". */
+  items: { id: string; name: string; amount: Cents; color: string }[]
+}
+
 export interface Settings {
   id: 'app'
   primaryCurrency: Currency
@@ -38,6 +50,7 @@ export interface Settings {
   /** Last automatic check (ms). */
   rateCheckedAt: number | null
   monthlyAllowance: Cents | null
+  salaryPlan: SalaryPlan | null
   onboarded: boolean
   hideAmounts: boolean
   isDemo: boolean

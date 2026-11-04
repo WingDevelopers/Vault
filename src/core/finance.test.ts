@@ -2,13 +2,13 @@ import { describe, expect, it } from 'vitest'
 import { convert, formatMoney, groupInput, nextInput, parseAmount, toInput, totalIn } from './money'
 import { addMonths, monthRange } from './dates'
 import {
-  balance, budgetProgress, dueOccurrences, expectedIncome, reminderDue, reminderState, expensesByCategory, holding, netWorth, netWorthHistory, projectGoal, summary, type Ledger,
+  balance, budgetProgress, dueOccurrences, expectedIncome, reminderDue, reminderState, salarySplit, expensesByCategory, holding, netWorth, netWorthHistory, projectGoal, summary, type Ledger,
 } from './finance'
 import type { Account, Contribution, Investment, Settings, Transaction } from './types'
 
 const settings: Settings = {
   id: 'app', primaryCurrency: 'CRC', crcPerUSD: '500', rateUpdatedAt: '2026-01-01', monthlyAllowance: null, onboarded: true,
-  displayCurrency: null, allowanceCurrency: null, autoRate: false, rateSource: null, rateCheckedAt: null, hideAmounts: false, isDemo: false, lastAccountId: null, lock: { enabled: false, pinHash: null, pinSalt: null, credentialId: null },
+  displayCurrency: null, allowanceCurrency: null, autoRate: false, rateSource: null, rateCheckedAt: null, salaryPlan: null, hideAmounts: false, isDemo: false, lastAccountId: null, lock: { enabled: false, pinHash: null, pinSalt: null, credentialId: null },
 }
 const acct = (id: string, currency: 'CRC' | 'USD', opening: number, kind: Account['kind'] = 'bank'): Account => ({
   id, name: id, kind, currency, openingBalance: opening, openingDate: '2026-01-01', archived: false, sortOrder: 0, createdAt: 0,
@@ -224,6 +224,21 @@ describe('recurrence', () => {
     // never checked → pending (overdue), one-offs stay done
     expect(reminderState({ ...r, index: 0, lastDone: null }, '2026-11-10')).toEqual({ date: '2026-11-03', done: false })
     expect(reminderState({ ...r, repeat: null, index: 0, doneAt: 1 }, '2026-11-10')).toEqual({ date: null, done: true })
+  })
+  it('splits the salary so the slices always add up to it', () => {
+    const rule = { id: 'r', title: 'Salary', kind: 'income' as const, amount: col(700_000), currency: 'CRC' as const, frequency: 'semimonthly' as const,
+      days: [15, 30] as [number, number], startDate: '2026-10-01', endDate: null, generatedCount: 0, active: true, accountId: 'bank',
+      destAccountId: null, categoryId: null, createdAt: 0 }
+    const plan = { currency: 'CRC' as const, salary: null, investments: col(400_000), items: [{ id: 'a', name: 'Adventure fund', amount: col(100_000), color: '#B794F6' }] }
+    const s = salarySplit(plan, [rule], col(600_000), 'CRC', '500')
+    expect(s.salary).toBe(col(1_400_000)) // two paydays of ₡700,000
+    expect(s.slices.map((x) => x.label)).toEqual(['Expenses', 'Investments', 'Adventure fund'])
+    expect(s.unassigned).toBe(col(300_000))
+    expect(s.slices.reduce((a, x) => a + x.value, 0) + s.unassigned).toBe(s.salary)
+    // manual salary, shown in USD
+    expect(salarySplit({ ...plan, salary: col(1_000_000) }, [], 0, 'USD', '500').salary).toBe(2_000_00)
+    // overspending shows as negative unassigned
+    expect(salarySplit(plan, [rule], col(1_200_000), 'CRC', '500').unassigned).toBe(-col(300_000))
   })
   it('clamps month ends in leap years', () => {
     expect(addMonths('2028-01-31', 1)).toBe('2028-02-29')
